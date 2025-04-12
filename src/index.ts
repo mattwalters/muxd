@@ -4,10 +4,10 @@ import chalk from "chalk";
 import * as fs from "fs";
 import * as path from "path";
 
-// Use a simpler terminal type to avoid xterm-256color issues.
+// Use a simpler terminal type to avoid some escape sequence issues.
 process.env.TERM = "xterm";
 
-// Define the config interfaces.
+// Define the configuration interfaces.
 interface ProcessConfig {
   name: string;
   cmd: string;
@@ -22,6 +22,12 @@ interface Config {
 const configPath = path.resolve(__dirname, "config.json");
 const configContent = fs.readFileSync(configPath, "utf8");
 const config: Config = JSON.parse(configContent);
+
+// Build a mapping for process configurations keyed by process name.
+const processConfigs: Record<string, ProcessConfig> = {};
+config.processes.forEach((proc) => {
+  processConfigs[proc.name] = proc;
+});
 
 // Explicit map between color names and hex codes.
 const colorMapping: Record<string, string> = {
@@ -39,49 +45,95 @@ function getColorName(index: number): string {
   return colorKeys[index % colorKeys.length];
 }
 
-// Global storage for all log lines.
-let allLogs: string[] = [];
-// Current filter string (as a regular expression) – empty means no filtering.
-let currentFilter: string = "";
+// We'll keep a mapping from process name to its assigned hex color.
+const assignedProcessColors: Record<string, string> = {};
+config.processes.forEach((p, i) => {
+  const colorName = getColorName(i);
+  assignedProcessColors[p.name] = colorMapping[colorName];
+});
 
-// Update the log display based on the current filter.
+// Define a log entry interface.
+interface LogEntry {
+  process: string;
+  text: string;
+}
+
+// Global storage for all log entries.
+let allLogs: LogEntry[] = [];
+
+// Global state for filtering.
+let currentFilter: string = ""; // regex filter (if any)
+let soloProcess: string | null = null; // if set, only show logs from this process
+
+// Update the log display based on the current filter and solo settings.
 function updateLogDisplay(): void {
-  let lines = allLogs;
+  let entries = allLogs;
+
+  // If solo mode is active, filter by process.
+  if (soloProcess) {
+    entries = entries.filter((entry) => entry.process === soloProcess);
+  }
+
+  // If there's a regex filter active, filter the entries accordingly.
   if (currentFilter.trim() !== "") {
     try {
-      // Create a regular expression using the filter string.
       const re = new RegExp(currentFilter, "gi");
-      // Filter lines to only those that match.
-      lines = allLogs.filter((line) => re.test(line));
-      // Replace matching parts with highlighted version.
-      lines = lines.map((line) =>
-        line.replace(re, (match) => chalk.bgYellow(match)),
-      );
+      entries = entries.filter((entry) => {
+        // Test against the plain line.
+        const plainLine = `[${entry.process}] ${entry.text}`;
+        return re.test(plainLine);
+      });
     } catch (err) {
-      // If the regex is invalid, ignore filtering.
-      // You could also choose to notify the user.
       console.error("Invalid filter regex", err);
     }
   }
-  // Set the log box content to the filtered lines.
-  logBox.setContent(lines.join("\n"));
+
+  // Format each entry.
+  const formattedLines = entries.map((entry) => {
+    let line = "";
+    // If we have an assigned color for this process, prefix with it.
+    if (assignedProcessColors[entry.process]) {
+      line =
+        chalk.hex(assignedProcessColors[entry.process])(`[${entry.process}] `) +
+        entry.text;
+    } else {
+      line = `[${entry.process}] ` + entry.text;
+    }
+    // If a regex filter is active, highlight matching parts.
+    if (currentFilter.trim() !== "") {
+      try {
+        const re = new RegExp(currentFilter, "gi");
+        line = line.replace(re, (match) => chalk.bgYellow(match));
+      } catch (err) {
+        // Ignore invalid regex errors.
+      }
+    }
+    return line;
+  });
+  // Update the log box content.
+  logBox.setContent(formattedLines.join("\n"));
   screen.render();
 }
 
-// Create a Blessed screen with proper terminal handling.
+// Helper to add a log entry.
+function addLogEntry(processName: string, text: string): void {
+  allLogs.push({ process: processName, text });
+  updateLogDisplay();
+}
+
+// Create a Blessed screen.
 const screen = blessed.screen({
   smartCSR: true,
   fastCSR: true,
   title: "Dev Tool Log Viewer",
 });
 
-// Create a log box widget that covers most of the screen.
-// We use a basic box (not blessed.log) so that we can update its content.
+// Create a log box widget.
 const logBox = blessed.box({
   top: 0,
   left: 0,
   width: "100%",
-  height: "100%-1", // Leave space at the bottom for a status bar.
+  height: "100%-1",
   border: { type: "line" },
   scrollbar: {
     ch: " ",
@@ -95,52 +147,48 @@ const logBox = blessed.box({
   content: "",
 });
 
-// Create a status bar widget at the bottom.
+// Create a status bar widget.
 const statusBar = blessed.box({
   bottom: 0,
   left: 0,
   width: "100%",
   height: 1,
-  content: "Press 'q' to quit. Press '/' to filter logs.",
+  content:
+    "Press 'q' to quit. Press '/' to filter. Press 's' to solo a process. Press 'r' to restart a process.",
   style: {
     fg: "white",
     bg: "blue",
   },
 });
 
-// Append the widgets to the screen.
+// Append widgets to the screen.
 screen.append(logBox);
 screen.append(statusBar);
-
-// Render the initial screen.
 screen.render();
 
-// Keep track of spawned processes.
-const runningProcesses: ChildProcess[] = [];
+// Keep track of running processes in a mapping.
+const runningProcessesMap: Record<string, ChildProcess> = {};
 
-// Function to kill all processes and exit cleanly.
+// Cleanup function: kill all processes and exit.
 function cleanup() {
-  for (const proc of runningProcesses) {
+  Object.values(runningProcessesMap).forEach((proc) => {
     try {
       if (!proc.killed) {
         proc.kill();
       }
     } catch (err) {
-      // Ignore errors when killing processes.
+      // ignore errors
     }
-  }
+  });
   screen.destroy();
   process.exit(0);
 }
-
-// Bind keys to quit the application.
 screen.key(["escape", "q", "C-c"], cleanup);
 process.on("SIGINT", cleanup);
 process.on("SIGTERM", cleanup);
 
-// Bind the "/" key to show a prompt for filter input.
+// Bind "/" key to set a regex filter.
 screen.key("/", () => {
-  // Create a prompt widget.
   const prompt = blessed.prompt({
     parent: screen,
     border: "line",
@@ -153,72 +201,134 @@ screen.key("/", () => {
     keys: true,
     vi: true,
   });
-  prompt.input("Filter (regex):", "", (err, value) => {
-    if (value == null) {
-      // If no value entered, do nothing.
-      prompt.destroy();
-      screen.render();
-      return;
+  prompt.input("Regex filter:", currentFilter, (err, value) => {
+    if (value !== undefined) {
+      currentFilter = value.trim();
     }
-    // Update the global filter.
-    currentFilter = value.trim();
-    updateLogDisplay();
     prompt.destroy();
-    screen.render();
+    updateLogDisplay();
   });
 });
 
-// Helper function to add a log line (both to our store and the UI).
-function addLogLine(line: string): void {
-  allLogs.push(line);
-  updateLogDisplay();
-}
+// Bind "s" key to solo a process.
+screen.key("s", () => {
+  const choices = ["All processes", ...config.processes.map((p) => p.name)];
+  const list = blessed.list({
+    parent: screen,
+    border: "line",
+    label: " Solo Process (Select One) ",
+    width: "50%",
+    height: choices.length + 2,
+    top: "center",
+    left: "center",
+    items: choices,
+    keys: true,
+    vi: true,
+    mouse: true,
+    style: {
+      selected: {
+        bg: "blue",
+      },
+    },
+  });
+  list.focus();
+  list.once("select", (item, index) => {
+    list.destroy();
+    if (index === 0) {
+      soloProcess = null;
+    } else {
+      soloProcess = choices[index];
+    }
+    updateLogDisplay();
+  });
+  screen.render();
+});
 
-// Launch each process using the configuration from config.json.
-config.processes.forEach((procConfig, index) => {
-  const colorName = getColorName(index);
-  const hexColor = colorMapping[colorName];
+// Bind "r" key to restart a process.
+screen.key("r", () => {
+  // List processes available for restart.
+  const choices = config.processes.map((p) => p.name);
+  const list = blessed.list({
+    parent: screen,
+    border: "line",
+    label: " Restart Process (Select One) ",
+    width: "50%",
+    height: choices.length + 2,
+    top: "center",
+    left: "center",
+    items: choices,
+    keys: true,
+    vi: true,
+    mouse: true,
+    style: {
+      selected: {
+        bg: "blue",
+      },
+    },
+  });
+  list.focus();
+  list.once("select", (item, index) => {
+    list.destroy();
+    const processName = choices[index];
+    restartProcess(processName);
+  });
+  screen.render();
+});
 
-  addLogLine(chalk.hex(hexColor)(`[${procConfig.name}] Starting process...`));
-
+// Function to launch a process given its configuration.
+function launchProcess(procConfig: ProcessConfig): ChildProcess {
   const proc = spawn(procConfig.cmd, procConfig.args ?? [], {
     stdio: ["ignore", "pipe", "pipe"],
     shell: false,
   });
-
-  runningProcesses.push(proc);
-
-  // Handle stdout.
+  // Attach listeners.
   proc.stdout.on("data", (data: Buffer) => {
-    const line =
-      chalk.hex(hexColor)(`[${procConfig.name}] `) + data.toString().trimEnd();
-    addLogLine(line);
+    addLogEntry(procConfig.name, data.toString().trimEnd());
   });
-
-  // Handle stderr.
   proc.stderr.on("data", (data: Buffer) => {
-    const line =
-      chalk.hex(hexColor)(`[${procConfig.name} ERROR] `) +
-      data.toString().trimEnd();
-    addLogLine(line);
+    addLogEntry(procConfig.name, "ERROR: " + data.toString().trimEnd());
   });
-
-  // Process exit event.
   proc.on("close", (code) => {
-    const line = chalk.hex(hexColor)(
-      `[${procConfig.name}] exited with code ${code}`,
-    );
-    addLogLine(line);
-    const i = runningProcesses.indexOf(proc);
-    if (i !== -1) {
-      runningProcesses.splice(i, 1);
-    }
+    addLogEntry(procConfig.name, `exited with code ${code}`);
+    delete runningProcessesMap[procConfig.name];
   });
+  return proc;
+}
+
+// Function to restart a process by name.
+function restartProcess(processName: string): void {
+  const procConfig = processConfigs[processName];
+  if (!procConfig) {
+    addLogEntry(
+      "SYSTEM",
+      `Process configuration for ${processName} not found.`,
+    );
+    return;
+  }
+  addLogEntry("SYSTEM", `Restarting process ${processName}...`);
+  // Kill the current process if it's running.
+  const currentProc = runningProcessesMap[processName];
+  if (currentProc) {
+    try {
+      currentProc.kill();
+    } catch (err) {
+      console.error("Error killing process", processName, err);
+    }
+  }
+  // Launch a new process instance.
+  const newProc = launchProcess(procConfig);
+  runningProcessesMap[processName] = newProc;
+}
+
+// Launch each process initially.
+config.processes.forEach((procConfig) => {
+  addLogEntry(procConfig.name, "Starting process...");
+  const proc = launchProcess(procConfig);
+  runningProcessesMap[procConfig.name] = proc;
 });
 
 // Log initial status.
-addLogLine(
-  chalk.white(
-    `Started ${config.processes.length} processes. Logs will appear below.`,
-  ),
+addLogEntry(
+  "SYSTEM",
+  `Started ${config.processes.length} processes. Logs will appear below.`,
 );
