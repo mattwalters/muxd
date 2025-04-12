@@ -377,7 +377,6 @@ function restartProcess(processName: string): void {
 }
 
 // --- IPC (Master/Client) Implementation using a Unix Domain Socket ---
-
 const sockPath = path.join("/tmp", "muxd.sock");
 let isMaster = false;
 let ipcServer: net.Server | null = null;
@@ -402,11 +401,13 @@ function startMaster() {
   }
   ipcServer = net.createServer((socket) => {
     ipcClients.push(socket);
+    // **When a client connects, immediately send the full log history.**
+    const historyMessage = JSON.stringify({ type: "history", data: allLogs });
+    socket.write(historyMessage + "\n");
     socket.on("data", (data) => {
       try {
         const message = JSON.parse(data.toString());
-        // Here you can implement command handling from clients.
-        // For now, we just log it.
+        // Process client commands (if any). For now, we just log them.
         addLogEntry(
           "SYSTEM",
           `Received command from client: ${JSON.stringify(message)}`,
@@ -420,7 +421,6 @@ function startMaster() {
       if (index !== -1) ipcClients.splice(index, 1);
     });
   });
-
   ipcServer.listen(sockPath, () => {
     addLogEntry("SYSTEM", `IPC server listening on ${sockPath}`);
   });
@@ -455,8 +455,11 @@ function startClient(client: net.Socket) {
     for (const msg of messages) {
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.type === "log" && parsed.data) {
-          // Append the log entry received from the server.
+        if (parsed.type === "history" && Array.isArray(parsed.data)) {
+          // Replace our log history with the full history from the master.
+          allLogs = parsed.data;
+          updateLogDisplay();
+        } else if (parsed.type === "log" && parsed.data) {
           allLogs.push(parsed.data);
           updateLogDisplay();
         }
@@ -470,12 +473,10 @@ function startClient(client: net.Socket) {
 // --- IPC Startup Logic ---
 // Try to connect as a client.
 const clientSocket = net.createConnection({ path: sockPath }, () => {
-  // If we connect, we run as client.
+  // If we connect, run as client.
   startClient(clientSocket);
 });
 clientSocket.on("error", (err) => {
   // If connection fails, assume no master is running.
   startMaster();
 });
-
-// --- End of Code ---
