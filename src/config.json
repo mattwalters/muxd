@@ -1,0 +1,28 @@
+{
+  "processes": [
+    {
+      "name": "Process1",
+      "cmd": "bash",
+      "args": [
+        "-c",
+        "for i in {1..100}; do echo \"Process1 log $i\"; sleep 2; done"
+      ]
+    },
+    {
+      "name": "Process2",
+      "cmd": "bash",
+      "args": [
+        "-c",
+        "for i in {1..200}; do echo \"Process2 log $i\"; sleep 1; done"
+      ]
+    },
+    {
+      "name": "API",
+      "cmd": "bash",
+      "args": [
+        "-c",
+        "for i in {1..50}; do echo \"Process2 log $i\"; sleep 3; done"
+      ]
+    }
+  ]
+}

@@ -1,9 +1,10 @@
 {
   "name": "muxd",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "",
   "main": "index.js",
   "scripts": {
+    "dev": "npx src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -19,9 +20,12 @@
   },
   "homepage": "https://github.com/mattwalters/muxd#readme",
   "dependencies": {
+    "blessed": "^0.1.81",
     "chalk": "^5.4.1"
   },
   "devDependencies": {
+    "@types/blessed": "^0.1.25",
+    "@types/chalk": "^0.4.31",
     "@types/node": "^22.14.1",
     "typescript": "^5.8.3"
   }
