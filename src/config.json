@@ -1,28 +1,42 @@
 {
   "processes": [
     {
-      "name": "Process1",
-      "cmd": "bash",
+      "name": "db",
+      "cmd": "node",
       "args": [
-        "-c",
-        "for i in {1..100}; do echo \"Process1 log $i\"; sleep 2; done"
-      ]
+        "-e",
+        "const http = require('http'); const server = http.createServer((req, res) => { if (req.url === '/health') { res.writeHead(200, {'Content-Type': 'text/plain'}); res.end('ok'); } else { res.end('db'); } }); server.listen(5500, () => { console.log('DB server listening on 5500'); }); setInterval(() => {}, 10000);"
+      ],
+      "ready": {
+        "type": "url",
+        "url": "http://localhost:5500/health",
+        "interval": 500,
+        "timeout": 10000
+      }
     },
     {
-      "name": "Process2",
-      "cmd": "bash",
+      "name": "api",
+      "cmd": "node",
       "args": [
-        "-c",
-        "for i in {1..200}; do echo \"Process2 log $i\"; sleep 1; done"
-      ]
+        "-e",
+        "const http = require('http'); const server = http.createServer((req, res) => { if (req.url === '/health') { res.writeHead(200, {'Content-Type': 'text/plain'}); res.end('ok'); } else { res.end('api'); } }); server.listen(4400, () => { console.log('API server listening on 4400'); }); setInterval(() => {}, 10000);"
+      ],
+      "dependsOn": ["db"],
+      "ready": {
+        "type": "command",
+        "command": "curl -fsS http://localhost:4400/health",
+        "interval": 500,
+        "timeout": 10000
+      }
     },
     {
-      "name": "API",
-      "cmd": "bash",
+      "name": "web",
+      "cmd": "node",
       "args": [
-        "-c",
-        "for i in {1..50}; do echo \"Process2 log $i\"; sleep 3; done"
-      ]
+        "-e",
+        "const http = require('http'); const server = http.createServer((req, res) => { res.end('web'); }); server.listen(3300, () => { console.log('Web server listening on 3300'); }); setInterval(() => {}, 10000);"
+      ],
+      "dependsOn": ["api"]
     }
   ]
 }

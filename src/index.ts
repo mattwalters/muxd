@@ -1,24 +1,37 @@
 import * as blessed from "blessed";
-import { spawn, ChildProcess } from "child_process";
+import { spawn, ChildProcess, exec } from "child_process";
 import chalk from "chalk";
 import * as fs from "fs";
 import * as path from "path";
+import * as http from "http";
+import * as https from "https";
 
-// Use a simpler terminal type to avoid some escape sequence issues.
+// Set a simpler terminal to avoid some escape sequence issues.
 process.env.TERM = "xterm";
 
-// Define the configuration interfaces.
+// --- Interfaces for configuration ---
+
+interface ReadyCheck {
+  type: "command" | "url";
+  command?: string;
+  url?: string;
+  interval?: number; // in ms, default 1000
+  timeout?: number; // in ms, default 30000
+}
+
 interface ProcessConfig {
   name: string;
   cmd: string;
   args?: string[];
+  dependsOn?: string[];
+  ready?: ReadyCheck;
 }
 
 interface Config {
   processes: ProcessConfig[];
 }
 
-// Load configuration from config.json.
+// --- Load configuration ---
 const configPath = path.resolve(__dirname, "config.json");
 const configContent = fs.readFileSync(configPath, "utf8");
 const config: Config = JSON.parse(configContent);
@@ -29,7 +42,7 @@ config.processes.forEach((proc) => {
   processConfigs[proc.name] = proc;
 });
 
-// Explicit map between color names and hex codes.
+// --- Color mapping (unchanged) ---
 const colorMapping: Record<string, string> = {
   red: "#FF0000",
   yellow: "#FFFF00",
@@ -39,47 +52,36 @@ const colorMapping: Record<string, string> = {
   cyan: "#00FFFF",
 };
 
-// Helper function to choose a color name for each process.
 function getColorName(index: number): string {
   const colorKeys = Object.keys(colorMapping);
   return colorKeys[index % colorKeys.length];
 }
 
-// We'll keep a mapping from process name to its assigned hex color.
 const assignedProcessColors: Record<string, string> = {};
 config.processes.forEach((p, i) => {
   const colorName = getColorName(i);
   assignedProcessColors[p.name] = colorMapping[colorName];
 });
 
-// Define a log entry interface.
+// --- Global log & filter handling (unchanged) ---
 interface LogEntry {
   process: string;
   text: string;
 }
 
-// Global storage for all log entries.
 let allLogs: LogEntry[] = [];
+let currentFilter: string = "";
+let soloProcess: string | null = null;
 
-// Global state for filtering.
-let currentFilter: string = ""; // regex filter (if any)
-let soloProcess: string | null = null; // if set, only show logs from this process
-
-// Update the log display based on the current filter and solo settings.
 function updateLogDisplay(): void {
   let entries = allLogs;
-
-  // If solo mode is active, filter by process.
   if (soloProcess) {
     entries = entries.filter((entry) => entry.process === soloProcess);
   }
-
-  // If there's a regex filter active, filter the entries accordingly.
   if (currentFilter.trim() !== "") {
     try {
       const re = new RegExp(currentFilter, "gi");
       entries = entries.filter((entry) => {
-        // Test against the plain line.
         const plainLine = `[${entry.process}] ${entry.text}`;
         return re.test(plainLine);
       });
@@ -87,57 +89,44 @@ function updateLogDisplay(): void {
       console.error("Invalid filter regex", err);
     }
   }
-
-  // Format each entry.
   const formattedLines = entries.map((entry) => {
-    let line = "";
-    // If we have an assigned color for this process, prefix with it.
-    if (assignedProcessColors[entry.process]) {
-      line =
-        chalk.hex(assignedProcessColors[entry.process])(`[${entry.process}] `) +
-        entry.text;
-    } else {
-      line = `[${entry.process}] ` + entry.text;
-    }
-    // If a regex filter is active, highlight matching parts.
+    let line = assignedProcessColors[entry.process]
+      ? chalk.hex(assignedProcessColors[entry.process])(`[${entry.process}] `) +
+        entry.text
+      : `[${entry.process}] ` + entry.text;
     if (currentFilter.trim() !== "") {
       try {
         const re = new RegExp(currentFilter, "gi");
         line = line.replace(re, (match) => chalk.bgYellow(match));
       } catch (err) {
-        // Ignore invalid regex errors.
+        // Ignore regex errors here.
       }
     }
     return line;
   });
-  // Update the log box content.
   logBox.setContent(formattedLines.join("\n"));
   screen.render();
 }
 
-// Helper to add a log entry.
 function addLogEntry(processName: string, text: string): void {
   allLogs.push({ process: processName, text });
   updateLogDisplay();
 }
 
-// Create a Blessed screen.
+// --- Create Blessed UI (unchanged) ---
 const screen = blessed.screen({
   smartCSR: true,
   fastCSR: true,
   title: "Dev Tool Log Viewer",
 });
 
-// Create a log box widget.
 const logBox = blessed.box({
   top: 0,
   left: 0,
   width: "100%",
   height: "100%-1",
   border: { type: "line" },
-  scrollbar: {
-    ch: " ",
-  },
+  scrollbar: { ch: " " },
   alwaysScroll: true,
   scrollable: true,
   keys: true,
@@ -147,38 +136,145 @@ const logBox = blessed.box({
   content: "",
 });
 
-// Create a status bar widget.
 const statusBar = blessed.box({
   bottom: 0,
   left: 0,
   width: "100%",
   height: 1,
-  content:
-    "Press 'q' to quit. Press '/' to filter. Press 's' to solo a process. Press 'r' to restart a process.",
-  style: {
-    fg: "white",
-    bg: "blue",
-  },
+  content: "Press 'q' to quit. '/' to filter, 's' to solo, 'r' to restart.",
+  style: { fg: "white", bg: "blue" },
 });
 
-// Append widgets to the screen.
 screen.append(logBox);
 screen.append(statusBar);
 screen.render();
 
-// Keep track of running processes in a mapping.
+// --- Process readiness state ---
+const processStatus: Record<string, boolean> = {};
+// Initially mark all as not ready.
+config.processes.forEach((proc) => {
+  processStatus[proc.name] = false;
+});
+
+// --- Helper: Wait for Dependencies ---
+function waitForDependencies(deps: string[]): Promise<void> {
+  return new Promise((resolve) => {
+    const interval = setInterval(() => {
+      const allReady = deps.every((dep) => processStatus[dep] === true);
+      if (allReady) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 500);
+  });
+}
+
+// --- Helper: Wait for Ready Check ---
+function waitForReadyCheck(check: ReadyCheck): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const intervalMs = check.interval || 1000;
+    const timeoutMs = check.timeout || 30000;
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      if (Date.now() - startTime > timeoutMs) {
+        clearInterval(interval);
+        reject(new Error("Ready check timed out"));
+        return;
+      }
+      if (check.type === "command" && check.command) {
+        exec(check.command, (error) => {
+          if (!error) {
+            clearInterval(interval);
+            resolve();
+          }
+        });
+      } else if (check.type === "url" && check.url) {
+        const lib = check.url.startsWith("https") ? https : http;
+        lib
+          .get(check.url, (res) => {
+            if (
+              res.statusCode &&
+              res.statusCode >= 200 &&
+              res.statusCode < 300
+            ) {
+              clearInterval(interval);
+              resolve();
+            }
+          })
+          .on("error", () => {
+            // Ignore errors and continue polling
+          });
+      } else {
+        clearInterval(interval);
+        reject(new Error("Invalid ready check configuration"));
+      }
+    }, intervalMs);
+  });
+}
+
+// --- Updated Process Launching ---
+
+// Original launchProcess: attaches stdout/stderr listeners and returns the ChildProcess.
+function launchProcess(procConfig: ProcessConfig): ChildProcess {
+  const proc = spawn(procConfig.cmd, procConfig.args ?? [], {
+    stdio: ["ignore", "pipe", "pipe"],
+    shell: false,
+  });
+  proc.stdout.on("data", (data: Buffer) => {
+    addLogEntry(procConfig.name, data.toString().trimEnd());
+  });
+  proc.stderr.on("data", (data: Buffer) => {
+    addLogEntry(procConfig.name, "ERROR: " + data.toString().trimEnd());
+  });
+  proc.on("close", (code) => {
+    addLogEntry(procConfig.name, `exited with code ${code}`);
+    delete runningProcessesMap[procConfig.name];
+  });
+  return proc;
+}
+
+// Global mapping for running processes.
 const runningProcessesMap: Record<string, ChildProcess> = {};
 
-// Cleanup function: kill all processes and exit.
+// New function: Start a process respecting dependencies and performing the ready check.
+async function startProcess(procConfig: ProcessConfig): Promise<ChildProcess> {
+  // If there are dependencies, wait until each is marked ready.
+  if (procConfig.dependsOn && procConfig.dependsOn.length > 0) {
+    addLogEntry(
+      procConfig.name,
+      `Waiting for dependencies: ${procConfig.dependsOn.join(", ")}`,
+    );
+    await waitForDependencies(procConfig.dependsOn);
+    addLogEntry(procConfig.name, "Dependencies are ready.");
+  }
+  // Launch the process.
+  const proc = launchProcess(procConfig);
+  runningProcessesMap[procConfig.name] = proc;
+  // If a ready check is defined, run it.
+  if (procConfig.ready) {
+    addLogEntry(procConfig.name, "Performing ready check...");
+    try {
+      await waitForReadyCheck(procConfig.ready);
+      addLogEntry(procConfig.name, "Ready check passed.");
+    } catch (err: any) {
+      addLogEntry(procConfig.name, `Ready check failed: ${err.message}`);
+    }
+  } else {
+    // No ready check: mark as ready immediately.
+    addLogEntry(procConfig.name, "No ready check defined; marking as ready.");
+  }
+  processStatus[procConfig.name] = true;
+  return proc;
+}
+
+// --- Key Bindings & Cleanup (unchanged) ---
 function cleanup() {
   Object.values(runningProcessesMap).forEach((proc) => {
     try {
       if (!proc.killed) {
         proc.kill();
       }
-    } catch (err) {
-      // ignore errors
-    }
+    } catch (err) {}
   });
   screen.destroy();
   process.exit(0);
@@ -187,7 +283,6 @@ screen.key(["escape", "q", "C-c"], cleanup);
 process.on("SIGINT", cleanup);
 process.on("SIGTERM", cleanup);
 
-// Bind "/" key to set a regex filter.
 screen.key("/", () => {
   const prompt = blessed.prompt({
     parent: screen,
@@ -210,7 +305,6 @@ screen.key("/", () => {
   });
 });
 
-// Bind "s" key to solo a process.
 screen.key("s", () => {
   const choices = ["All processes", ...config.processes.map((p) => p.name)];
   const list = blessed.list({
@@ -225,28 +319,18 @@ screen.key("s", () => {
     keys: true,
     vi: true,
     mouse: true,
-    style: {
-      selected: {
-        bg: "blue",
-      },
-    },
+    style: { selected: { bg: "blue" } },
   });
   list.focus();
   list.once("select", (item, index) => {
     list.destroy();
-    if (index === 0) {
-      soloProcess = null;
-    } else {
-      soloProcess = choices[index];
-    }
+    soloProcess = index === 0 ? null : choices[index];
     updateLogDisplay();
   });
   screen.render();
 });
 
-// Bind "r" key to restart a process.
 screen.key("r", () => {
-  // List processes available for restart.
   const choices = config.processes.map((p) => p.name);
   const list = blessed.list({
     parent: screen,
@@ -260,11 +344,7 @@ screen.key("r", () => {
     keys: true,
     vi: true,
     mouse: true,
-    style: {
-      selected: {
-        bg: "blue",
-      },
-    },
+    style: { selected: { bg: "blue" } },
   });
   list.focus();
   list.once("select", (item, index) => {
@@ -275,38 +355,14 @@ screen.key("r", () => {
   screen.render();
 });
 
-// Function to launch a process given its configuration.
-function launchProcess(procConfig: ProcessConfig): ChildProcess {
-  const proc = spawn(procConfig.cmd, procConfig.args ?? [], {
-    stdio: ["ignore", "pipe", "pipe"],
-    shell: false,
-  });
-  // Attach listeners.
-  proc.stdout.on("data", (data: Buffer) => {
-    addLogEntry(procConfig.name, data.toString().trimEnd());
-  });
-  proc.stderr.on("data", (data: Buffer) => {
-    addLogEntry(procConfig.name, "ERROR: " + data.toString().trimEnd());
-  });
-  proc.on("close", (code) => {
-    addLogEntry(procConfig.name, `exited with code ${code}`);
-    delete runningProcessesMap[procConfig.name];
-  });
-  return proc;
-}
-
 // Function to restart a process by name.
 function restartProcess(processName: string): void {
   const procConfig = processConfigs[processName];
   if (!procConfig) {
-    addLogEntry(
-      "SYSTEM",
-      `Process configuration for ${processName} not found.`,
-    );
+    addLogEntry("SYSTEM", `Configuration for ${processName} not found.`);
     return;
   }
   addLogEntry("SYSTEM", `Restarting process ${processName}...`);
-  // Kill the current process if it's running.
   const currentProc = runningProcessesMap[processName];
   if (currentProc) {
     try {
@@ -315,20 +371,23 @@ function restartProcess(processName: string): void {
       console.error("Error killing process", processName, err);
     }
   }
-  // Launch a new process instance.
-  const newProc = launchProcess(procConfig);
-  runningProcessesMap[processName] = newProc;
+  startProcess(procConfig).catch((err) => {
+    addLogEntry("SYSTEM", `Failed to restart ${processName}: ${err.message}`);
+  });
 }
 
-// Launch each process initially.
-config.processes.forEach((procConfig) => {
-  addLogEntry(procConfig.name, "Starting process...");
-  const proc = launchProcess(procConfig);
-  runningProcessesMap[procConfig.name] = proc;
-});
-
-// Log initial status.
-addLogEntry(
-  "SYSTEM",
-  `Started ${config.processes.length} processes. Logs will appear below.`,
-);
+// --- Launch Processes (Using our new startProcess function) ---
+(async () => {
+  for (const procConfig of config.processes) {
+    addLogEntry(procConfig.name, "Starting process...");
+    try {
+      await startProcess(procConfig);
+    } catch (err: any) {
+      addLogEntry(procConfig.name, `Failed to start: ${err.message}`);
+    }
+  }
+  addLogEntry(
+    "SYSTEM",
+    `Started ${config.processes.length} processes. Logs will appear below.`,
+  );
+})();
