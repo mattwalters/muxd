@@ -5,7 +5,7 @@
       "cmd": "node",
       "args": [
         "-e",
-        "const http = require('http'); const server = http.createServer((req, res) => { if (req.url === '/health') { res.writeHead(200, {'Content-Type': 'text/plain'}); res.end('ok'); } else { res.end('db'); } }); server.listen(5500, () => { console.log('DB server listening on 5500'); }); setInterval(() => {}, 10000);"
+        "const http = require('http'); const server = http.createServer((req, res) => { if (req.url === '/health') { res.writeHead(200, {'Content-Type': 'text/plain'}); res.end('ok'); } else { res.end('db'); } }); server.listen(5500, () => { console.log('DB server listening on 5500'); }); setInterval(() => { console.log('DB heartbeat'); }, 3000);"
       ],
       "ready": {
         "type": "url",
@@ -19,7 +19,7 @@
       "cmd": "node",
       "args": [
         "-e",
-        "const http = require('http'); const server = http.createServer((req, res) => { if (req.url === '/health') { res.writeHead(200, {'Content-Type': 'text/plain'}); res.end('ok'); } else { res.end('api'); } }); server.listen(4400, () => { console.log('API server listening on 4400'); }); setInterval(() => {}, 10000);"
+        "const http = require('http'); const server = http.createServer((req, res) => { if (req.url === '/health') { res.writeHead(200, {'Content-Type': 'text/plain'}); res.end('ok'); } else { res.end('api'); } }); server.listen(4400, () => { console.log('API server listening on 4400'); }); setInterval(() => { console.log('API heartbeat'); }, 3000);"
       ],
       "dependsOn": ["db"],
       "ready": {
@@ -34,7 +34,7 @@
       "cmd": "node",
       "args": [
         "-e",
-        "const http = require('http'); const server = http.createServer((req, res) => { res.end('web'); }); server.listen(3300, () => { console.log('Web server listening on 3300'); }); setInterval(() => {}, 10000);"
+        "const http = require('http'); const server = http.createServer((req, res) => { res.end('web'); }); server.listen(3300, () => { console.log('Web server listening on 3300'); }); setInterval(() => { console.log('Web heartbeat'); }, 3000);"
       ],
       "dependsOn": ["api"]
     }

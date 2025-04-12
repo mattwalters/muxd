@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import * as blessed from "blessed";
 import { spawn, ChildProcess, exec } from "child_process";
 import chalk from "chalk";
@@ -5,18 +6,19 @@ import * as fs from "fs";
 import * as path from "path";
 import * as http from "http";
 import * as https from "https";
+import * as net from "net";
 
 // Set a simpler terminal to avoid some escape sequence issues.
 process.env.TERM = "xterm";
 
-// --- Interfaces for configuration ---
+// --- Configuration Interfaces ---
 
 interface ReadyCheck {
   type: "command" | "url";
   command?: string;
   url?: string;
-  interval?: number; // in ms, default 1000
-  timeout?: number; // in ms, default 30000
+  interval?: number; // ms, default 1000
+  timeout?: number; // ms, default 30000
 }
 
 interface ProcessConfig {
@@ -31,7 +33,7 @@ interface Config {
   processes: ProcessConfig[];
 }
 
-// --- Load configuration ---
+// --- Load configuration from config.json ---
 const configPath = path.resolve(__dirname, "config.json");
 const configContent = fs.readFileSync(configPath, "utf8");
 const config: Config = JSON.parse(configContent);
@@ -42,7 +44,7 @@ config.processes.forEach((proc) => {
   processConfigs[proc.name] = proc;
 });
 
-// --- Color mapping (unchanged) ---
+// --- Color Mapping (unchanged) ---
 const colorMapping: Record<string, string> = {
   red: "#FF0000",
   yellow: "#FFFF00",
@@ -53,8 +55,8 @@ const colorMapping: Record<string, string> = {
 };
 
 function getColorName(index: number): string {
-  const colorKeys = Object.keys(colorMapping);
-  return colorKeys[index % colorKeys.length];
+  const keys = Object.keys(colorMapping);
+  return keys[index % keys.length];
 }
 
 const assignedProcessColors: Record<string, string> = {};
@@ -63,7 +65,7 @@ config.processes.forEach((p, i) => {
   assignedProcessColors[p.name] = colorMapping[colorName];
 });
 
-// --- Global log & filter handling (unchanged) ---
+// --- Global Log & Filter Handling (unchanged) ---
 interface LogEntry {
   process: string;
   text: string;
@@ -99,7 +101,7 @@ function updateLogDisplay(): void {
         const re = new RegExp(currentFilter, "gi");
         line = line.replace(re, (match) => chalk.bgYellow(match));
       } catch (err) {
-        // Ignore regex errors here.
+        /* ignore */
       }
     }
     return line;
@@ -109,15 +111,19 @@ function updateLogDisplay(): void {
 }
 
 function addLogEntry(processName: string, text: string): void {
-  allLogs.push({ process: processName, text });
+  const entry: LogEntry = { process: processName, text };
+  allLogs.push(entry);
   updateLogDisplay();
+  if (isMaster) {
+    broadcast({ type: "log", data: entry });
+  }
 }
 
-// --- Create Blessed UI (unchanged) ---
+// --- Blessed UI Setup (unchanged) ---
 const screen = blessed.screen({
   smartCSR: true,
   fastCSR: true,
-  title: "Dev Tool Log Viewer",
+  title: "Muxd Log Viewer",
 });
 
 const logBox = blessed.box({
@@ -147,11 +153,9 @@ const statusBar = blessed.box({
 
 screen.append(logBox);
 screen.append(statusBar);
-screen.render();
 
-// --- Process readiness state ---
+// --- Process Readiness State ---
 const processStatus: Record<string, boolean> = {};
-// Initially mark all as not ready.
 config.processes.forEach((proc) => {
   processStatus[proc.name] = false;
 });
@@ -202,7 +206,7 @@ function waitForReadyCheck(check: ReadyCheck): Promise<void> {
             }
           })
           .on("error", () => {
-            // Ignore errors and continue polling
+            /* ignore */
           });
       } else {
         clearInterval(interval);
@@ -212,9 +216,8 @@ function waitForReadyCheck(check: ReadyCheck): Promise<void> {
   });
 }
 
-// --- Updated Process Launching ---
+// --- Process Launching Functions ---
 
-// Original launchProcess: attaches stdout/stderr listeners and returns the ChildProcess.
 function launchProcess(procConfig: ProcessConfig): ChildProcess {
   const proc = spawn(procConfig.cmd, procConfig.args ?? [], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -233,12 +236,9 @@ function launchProcess(procConfig: ProcessConfig): ChildProcess {
   return proc;
 }
 
-// Global mapping for running processes.
 const runningProcessesMap: Record<string, ChildProcess> = {};
 
-// New function: Start a process respecting dependencies and performing the ready check.
 async function startProcess(procConfig: ProcessConfig): Promise<ChildProcess> {
-  // If there are dependencies, wait until each is marked ready.
   if (procConfig.dependsOn && procConfig.dependsOn.length > 0) {
     addLogEntry(
       procConfig.name,
@@ -247,10 +247,8 @@ async function startProcess(procConfig: ProcessConfig): Promise<ChildProcess> {
     await waitForDependencies(procConfig.dependsOn);
     addLogEntry(procConfig.name, "Dependencies are ready.");
   }
-  // Launch the process.
   const proc = launchProcess(procConfig);
   runningProcessesMap[procConfig.name] = proc;
-  // If a ready check is defined, run it.
   if (procConfig.ready) {
     addLogEntry(procConfig.name, "Performing ready check...");
     try {
@@ -260,25 +258,30 @@ async function startProcess(procConfig: ProcessConfig): Promise<ChildProcess> {
       addLogEntry(procConfig.name, `Ready check failed: ${err.message}`);
     }
   } else {
-    // No ready check: mark as ready immediately.
     addLogEntry(procConfig.name, "No ready check defined; marking as ready.");
   }
   processStatus[procConfig.name] = true;
   return proc;
 }
 
-// --- Key Bindings & Cleanup (unchanged) ---
+// --- Key Bindings & Cleanup ---
+
 function cleanup() {
   Object.values(runningProcessesMap).forEach((proc) => {
     try {
-      if (!proc.killed) {
-        proc.kill();
-      }
+      if (!proc.killed) proc.kill();
     } catch (err) {}
   });
+  if (isMaster) {
+    ipcServer?.close();
+    try {
+      fs.unlinkSync(sockPath);
+    } catch (err) {}
+  }
   screen.destroy();
   process.exit(0);
 }
+
 screen.key(["escape", "q", "C-c"], cleanup);
 process.on("SIGINT", cleanup);
 process.on("SIGTERM", cleanup);
@@ -297,9 +300,7 @@ screen.key("/", () => {
     vi: true,
   });
   prompt.input("Regex filter:", currentFilter, (err, value) => {
-    if (value !== undefined) {
-      currentFilter = value.trim();
-    }
+    if (value !== undefined) currentFilter = value.trim();
     prompt.destroy();
     updateLogDisplay();
   });
@@ -355,7 +356,6 @@ screen.key("r", () => {
   screen.render();
 });
 
-// Function to restart a process by name.
 function restartProcess(processName: string): void {
   const procConfig = processConfigs[processName];
   if (!procConfig) {
@@ -376,18 +376,106 @@ function restartProcess(processName: string): void {
   });
 }
 
-// --- Launch Processes (Using our new startProcess function) ---
-(async () => {
-  for (const procConfig of config.processes) {
-    addLogEntry(procConfig.name, "Starting process...");
-    try {
-      await startProcess(procConfig);
-    } catch (err: any) {
-      addLogEntry(procConfig.name, `Failed to start: ${err.message}`);
-    }
+// --- IPC (Master/Client) Implementation using a Unix Domain Socket ---
+
+const sockPath = path.join("/tmp", "muxd.sock");
+let isMaster = false;
+let ipcServer: net.Server | null = null;
+const ipcClients: net.Socket[] = [];
+
+// Broadcast a JSON message to all connected IPC clients.
+function broadcast(message: any) {
+  const json = JSON.stringify(message);
+  ipcClients.forEach((client) => {
+    client.write(json + "\n");
+  });
+}
+
+// --- Master Server Mode ---
+function startMaster() {
+  isMaster = true;
+  // Remove any stale socket.
+  try {
+    fs.unlinkSync(sockPath);
+  } catch (err) {
+    /* ignore */
   }
-  addLogEntry(
-    "SYSTEM",
-    `Started ${config.processes.length} processes. Logs will appear below.`,
-  );
-})();
+  ipcServer = net.createServer((socket) => {
+    ipcClients.push(socket);
+    socket.on("data", (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        // Here you can implement command handling from clients.
+        // For now, we just log it.
+        addLogEntry(
+          "SYSTEM",
+          `Received command from client: ${JSON.stringify(message)}`,
+        );
+      } catch (err) {
+        addLogEntry("SYSTEM", `Error parsing IPC message: ${err}`);
+      }
+    });
+    socket.on("close", () => {
+      const index = ipcClients.indexOf(socket);
+      if (index !== -1) ipcClients.splice(index, 1);
+    });
+  });
+
+  ipcServer.listen(sockPath, () => {
+    addLogEntry("SYSTEM", `IPC server listening on ${sockPath}`);
+  });
+
+  // In master mode, launch processes as before.
+  (async () => {
+    for (const procConfig of config.processes) {
+      addLogEntry(procConfig.name, "Starting process...");
+      try {
+        await startProcess(procConfig);
+      } catch (err: any) {
+        addLogEntry(procConfig.name, `Failed to start: ${err.message}`);
+      }
+    }
+    addLogEntry(
+      "SYSTEM",
+      `Started ${config.processes.length} processes. Logs will appear below.`,
+    );
+  })();
+}
+
+// --- Client Mode ---
+function startClient(client: net.Socket) {
+  isMaster = false;
+  addLogEntry("SYSTEM", `Connected to muxd master via ${sockPath}`);
+  client.on("data", (data) => {
+    // Assume each JSON message is separated by a newline.
+    const messages = data
+      .toString()
+      .split("\n")
+      .filter((m) => m.trim() !== "");
+    for (const msg of messages) {
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.type === "log" && parsed.data) {
+          // Append the log entry received from the server.
+          allLogs.push(parsed.data);
+          updateLogDisplay();
+        }
+      } catch (err) {
+        console.error("Error parsing IPC message from master:", err);
+      }
+    }
+  });
+}
+
+// --- IPC Startup Logic ---
+// Try to connect as a client.
+const clientSocket = net.createConnection({ path: sockPath }, () => {
+  // If we connect, we run as client.
+  startClient(clientSocket);
+});
+clientSocket.on("error", (err) => {
+  // If connection fails, assume no master is running.
+  startMaster();
+});
+
+// --- End of Code ---
