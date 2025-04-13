@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import blessed from "blessed";
-import { spawn, ChildProcess, exec } from "child_process";
+import { spawn, ChildProcess, exec, execSync } from "child_process";
 import chalk from "chalk";
 import fs from "fs";
 import path from "path";
@@ -8,6 +8,7 @@ import http from "http";
 import https from "https";
 import net from "net";
 import { z } from "zod";
+import yaml from "js-yaml";
 
 // Set a simpler terminal to avoid some escape sequence issues.
 process.env.TERM = "xterm";
@@ -29,6 +30,11 @@ interface ProcessConfig {
   ready?: ReadyCheck;
 }
 
+interface Config {
+  processes: ProcessConfig[];
+  dockerCompose?: { file: string };
+}
+
 // --- Determine configuration file path ---
 // Look for a "-C" flag and use that file; otherwise default to "muxd.config.json" in the current working directory.
 const args = process.argv.slice(2);
@@ -48,8 +54,7 @@ if (!fs.existsSync(configFilePath)) {
 
 const configContent = fs.readFileSync(configFilePath, "utf8");
 
-// --- Zod Schema for Config Validation ---
-
+// --- Zod Schemas for Config Validation ---
 const ReadyCheckSchema = z.object({
   type: z.enum(["command", "url"]),
   command: z.string().optional(),
@@ -66,8 +71,14 @@ const ProcessConfigSchema = z.object({
   ready: ReadyCheckSchema.optional(),
 });
 
+// New schema for docker-compose support.
+const DockerComposeSchema = z.object({
+  file: z.string(), // relative or absolute path to docker-compose.yml
+});
+
 const ConfigSchema = z.object({
   processes: z.array(ProcessConfigSchema),
+  dockerCompose: DockerComposeSchema.optional(),
 });
 
 // Validate the configuration with Zod.
@@ -76,7 +87,59 @@ if (!parsedConfig.success) {
   console.error("Invalid configuration:", parsedConfig.error.format());
   process.exit(1);
 }
-const config = parsedConfig.data; // Now config is typed and validated
+const config = parsedConfig.data;
+
+// --- If a dockerCompose file is specified, handle it.
+if (config.dockerCompose) {
+  console.log("Using docker compose...");
+  const composePath = path.resolve(process.cwd(), config.dockerCompose.file);
+  if (!fs.existsSync(composePath)) {
+    console.error("Docker-compose file not found:", composePath);
+    process.exit(1);
+  }
+  console.log(`Using docker-compose file: ${composePath}`);
+
+  // Bring up docker services in detached mode.
+  try {
+    console.log("Starting docker compose services...");
+    // Using docker compose (v2 syntax) instead of docker-compose.
+    execSync(`docker compose -f "${composePath}" up -d`, { stdio: "inherit" });
+  } catch (err: any) {
+    console.error("Failed to start docker-compose services:", err.message);
+    process.exit(1);
+  }
+
+  // Parse the docker-compose YAML to extract service names.
+  try {
+    const composeContent = fs.readFileSync(composePath, "utf8");
+    const composeDoc: any = yaml.load(composeContent);
+    if (
+      composeDoc &&
+      typeof composeDoc === "object" &&
+      "services" in composeDoc
+    ) {
+      const services = Object.keys(composeDoc.services);
+      // For each service that is not already defined in processes, add a new ProcessConfig.
+      services.forEach((serviceName) => {
+        if (config.processes.find((p) => p.name === serviceName)) return;
+        config.processes.push({
+          name: serviceName,
+          // Use docker compose to stream logs for the service.
+          cmd: "docker",
+          args: ["compose", "-f", composePath, "logs", "-f", serviceName],
+        });
+      });
+    } else {
+      console.error(
+        "docker-compose file does not contain a valid 'services' section.",
+      );
+      process.exit(1);
+    }
+  } catch (err: any) {
+    console.error("Error parsing docker-compose file:", err.message);
+    process.exit(1);
+  }
+}
 
 // --- Build a mapping for process configurations keyed by process name. ---
 const processConfigs: Record<string, ProcessConfig> = {};
