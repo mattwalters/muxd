@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import * as blessed from "blessed";
+import blessed from "blessed";
 import { spawn, ChildProcess, exec } from "child_process";
 import chalk from "chalk";
-import * as fs from "fs";
-import * as path from "path";
-import * as http from "http";
-import * as https from "https";
-import * as net from "net";
+import fs from "fs";
+import path from "path";
+import http from "http";
+import https from "https";
+import net from "net";
 
 // Set a simpler terminal to avoid some escape sequence issues.
 process.env.TERM = "xterm";
@@ -233,7 +233,6 @@ function waitForReadyCheck(check: ReadyCheck): Promise<void> {
 }
 
 // --- Process Launching Functions ---
-
 function launchProcess(procConfig: ProcessConfig): ChildProcess {
   const proc = spawn(procConfig.cmd, procConfig.args ?? [], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -281,7 +280,6 @@ async function startProcess(procConfig: ProcessConfig): Promise<ChildProcess> {
 }
 
 // --- Key Bindings & Cleanup ---
-
 function cleanup() {
   Object.values(runningProcessesMap).forEach((proc) => {
     try {
