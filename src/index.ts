@@ -533,40 +533,6 @@ screen.key("/", () => {
   });
 });
 
-// Original solo process modal remains on "s" (if you wish to remove it, delete this handler).
-screen.key("s", () => {
-  const choices = ["All services", ...config.services.map((p) => p.name)];
-  const list = blessed.list({
-    parent: screen,
-    border: "line",
-    label: " Solo Process (Select One) ",
-    width: "50%",
-    height: choices.length + 2,
-    top: "center",
-    left: "center",
-    items: choices,
-    keys: true,
-    vi: true,
-    mouse: true,
-    style: { selected: { bg: "blue" } },
-  });
-  list.focus();
-  list.once("select", (item, index) => {
-    list.destroy();
-    // In this older implementation, soloProcess is replaced by our serviceFlags.
-    // For backward compatibility, you might clear all solo flags first.
-    Object.keys(serviceFlags).forEach(
-      (name) => (serviceFlags[name].solo = false),
-    );
-    if (index > 0) {
-      const procName = choices[index];
-      serviceFlags[procName].solo = true;
-    }
-    updateLogDisplay();
-  });
-  screen.render();
-});
-
 screen.key("r", () => {
   const choices = config.services.map((p) => p.name);
   const list = blessed.list({
