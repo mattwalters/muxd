@@ -31,8 +31,8 @@ interface ProcessConfig {
 }
 
 interface Config {
-  processes: ProcessConfig[];
-  dockerCompose?: { file: string };
+  services: ProcessConfig[];
+  dockerCompose?: { file: string; profile?: string };
 }
 
 // --- Determine configuration file path ---
@@ -74,10 +74,11 @@ const ProcessConfigSchema = z.object({
 // New schema for docker-compose support.
 const DockerComposeSchema = z.object({
   file: z.string(), // relative or absolute path to docker-compose.yml
+  profile: z.string().optional(),
 });
 
 const ConfigSchema = z.object({
-  processes: z.array(ProcessConfigSchema),
+  services: z.array(ProcessConfigSchema),
   dockerCompose: DockerComposeSchema.optional(),
 });
 
@@ -103,7 +104,13 @@ if (config.dockerCompose) {
   try {
     console.log("Starting docker compose services...");
     // Using docker compose (v2 syntax) instead of docker-compose.
-    execSync(`docker compose -f "${composePath}" up -d`, { stdio: "inherit" });
+    let profile = config.dockerCompose.profile ?? "";
+    if (profile) {
+      profile = ` --profile ${profile}`;
+    }
+    execSync(`docker compose${profile} -f "${composePath}" up -d`, {
+      stdio: "inherit",
+    });
   } catch (err: any) {
     console.error("Failed to start docker-compose services:", err.message);
     process.exit(1);
@@ -119,10 +126,10 @@ if (config.dockerCompose) {
       "services" in composeDoc
     ) {
       const services = Object.keys(composeDoc.services);
-      // For each service that is not already defined in processes, add a new ProcessConfig.
+      // For each service that is not already defined in services, add a new ProcessConfig.
       services.forEach((serviceName) => {
-        if (config.processes.find((p) => p.name === serviceName)) return;
-        config.processes.push({
+        if (config.services.find((p) => p.name === serviceName)) return;
+        config.services.push({
           name: serviceName,
           // Use docker compose to stream logs for the service.
           cmd: "docker",
@@ -143,7 +150,7 @@ if (config.dockerCompose) {
 
 // --- Build a mapping for process configurations keyed by process name. ---
 const processConfigs: Record<string, ProcessConfig> = {};
-config.processes.forEach((proc) => {
+config.services.forEach((proc) => {
   processConfigs[proc.name] = proc;
 });
 
@@ -163,7 +170,7 @@ function getColorName(index: number): string {
 }
 
 const assignedProcessColors: Record<string, string> = {};
-config.processes.forEach((p, i) => {
+config.services.forEach((p, i) => {
   const colorName = getColorName(i);
   assignedProcessColors[p.name] = colorMapping[colorName];
 });
@@ -260,7 +267,7 @@ screen.append(statusBar);
 
 // --- Process Readiness State ---
 const processStatus: Record<string, boolean> = {};
-config.processes.forEach((proc) => {
+config.services.forEach((proc) => {
   processStatus[proc.name] = false;
 });
 
@@ -422,7 +429,7 @@ screen.key("/", () => {
 });
 
 screen.key("s", () => {
-  const choices = ["All processes", ...config.processes.map((p) => p.name)];
+  const choices = ["All services", ...config.services.map((p) => p.name)];
   const list = blessed.list({
     parent: screen,
     border: "line",
@@ -447,7 +454,7 @@ screen.key("s", () => {
 });
 
 screen.key("r", () => {
-  const choices = config.processes.map((p) => p.name);
+  const choices = config.services.map((p) => p.name);
   const list = blessed.list({
     parent: screen,
     border: "line",
@@ -540,9 +547,9 @@ function startMaster() {
     addLogEntry("SYSTEM", `IPC server listening on ${sockPath}`);
   });
 
-  // In master mode, launch processes as before.
+  // In master mode, launch services as before.
   (async () => {
-    for (const procConfig of config.processes) {
+    for (const procConfig of config.services) {
       addLogEntry(procConfig.name, "Starting process...");
       try {
         await startProcess(procConfig);
@@ -552,7 +559,7 @@ function startMaster() {
     }
     addLogEntry(
       "SYSTEM",
-      `Started ${config.processes.length} processes. Logs will appear below.`,
+      `Started ${config.services.length} services. Logs will appear below.`,
     );
   })();
 }

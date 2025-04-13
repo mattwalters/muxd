@@ -2,7 +2,7 @@
   "dockerCompose": {
     "file": "./docker-compose.yml"
   },
-  "processes": [
+  "services": [
     {
       "name": "db",
       "cmd": "node",
