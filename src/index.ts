@@ -210,6 +210,7 @@ function updateLogDisplay(): void {
     return line;
   });
   logBox.setContent(formattedLines.join("\n"));
+  logBox.setScrollPerc(100);
   screen.render();
 }
 
@@ -319,22 +320,35 @@ function waitForReadyCheck(check: ReadyCheck): Promise<void> {
   });
 }
 
-// --- Process Launching Functions ---
 function launchProcess(procConfig: ProcessConfig): ChildProcess {
   const proc = spawn(procConfig.cmd, procConfig.args ?? [], {
     stdio: ["ignore", "pipe", "pipe"],
     shell: false,
   });
+
   proc.stdout.on("data", (data: Buffer) => {
-    addLogEntry(procConfig.name, data.toString().trimEnd());
+    const lines = data.toString().split("\n");
+    lines.forEach((line) => {
+      if (line.trim() !== "") {
+        addLogEntry(procConfig.name, line.trimEnd());
+      }
+    });
   });
+
   proc.stderr.on("data", (data: Buffer) => {
-    addLogEntry(procConfig.name, "ERROR: " + data.toString().trimEnd());
+    const lines = data.toString().split("\n");
+    lines.forEach((line) => {
+      if (line.trim() !== "") {
+        addLogEntry(procConfig.name, "ERROR: " + line.trimEnd());
+      }
+    });
   });
+
   proc.on("close", (code) => {
     addLogEntry(procConfig.name, `exited with code ${code}`);
     delete runningProcessesMap[procConfig.name];
   });
+
   return proc;
 }
 
