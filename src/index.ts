@@ -7,9 +7,27 @@ import path from "path";
 import http from "http";
 import https from "https";
 import net from "net";
+import { z } from "zod";
 
 // Set a simpler terminal to avoid some escape sequence issues.
 process.env.TERM = "xterm";
+
+// --- Configuration Interfaces ---
+interface ReadyCheck {
+  type: "command" | "url";
+  command?: string;
+  url?: string;
+  interval?: number; // ms, default 1000
+  timeout?: number; // ms, default 30000
+}
+
+interface ProcessConfig {
+  name: string;
+  cmd: string;
+  args?: string[];
+  dependsOn?: string[];
+  ready?: ReadyCheck;
+}
 
 // --- Determine configuration file path ---
 // Look for a "-C" flag and use that file; otherwise default to "muxd.config.json" in the current working directory.
@@ -30,31 +48,37 @@ if (!fs.existsSync(configFilePath)) {
 
 const configContent = fs.readFileSync(configFilePath, "utf8");
 
-// --- Configuration Interfaces ---
+// --- Zod Schema for Config Validation ---
 
-interface ReadyCheck {
-  type: "command" | "url";
-  command?: string;
-  url?: string;
-  interval?: number; // ms, default 1000
-  timeout?: number; // ms, default 30000
+const ReadyCheckSchema = z.object({
+  type: z.enum(["command", "url"]),
+  command: z.string().optional(),
+  url: z.string().optional(),
+  interval: z.number().optional(),
+  timeout: z.number().optional(),
+});
+
+const ProcessConfigSchema = z.object({
+  name: z.string(),
+  cmd: z.string(),
+  args: z.array(z.string()).optional(),
+  dependsOn: z.array(z.string()).optional(),
+  ready: ReadyCheckSchema.optional(),
+});
+
+const ConfigSchema = z.object({
+  processes: z.array(ProcessConfigSchema),
+});
+
+// Validate the configuration with Zod.
+const parsedConfig = ConfigSchema.safeParse(JSON.parse(configContent));
+if (!parsedConfig.success) {
+  console.error("Invalid configuration:", parsedConfig.error.format());
+  process.exit(1);
 }
+const config = parsedConfig.data; // Now config is typed and validated
 
-interface ProcessConfig {
-  name: string;
-  cmd: string;
-  args?: string[];
-  dependsOn?: string[];
-  ready?: ReadyCheck;
-}
-
-interface Config {
-  processes: ProcessConfig[];
-}
-
-const config: Config = JSON.parse(configContent);
-
-// Build a mapping for process configurations keyed by process name.
+// --- Build a mapping for process configurations keyed by process name. ---
 const processConfigs: Record<string, ProcessConfig> = {};
 config.processes.forEach((proc) => {
   processConfigs[proc.name] = proc;
