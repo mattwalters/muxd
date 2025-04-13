@@ -90,6 +90,13 @@ if (!parsedConfig.success) {
 }
 const config = parsedConfig.data;
 
+// --- Global state to track per-service mute/solo flags ---
+// Each service is initialized with { mute: false, solo: false }.
+const serviceFlags: Record<string, { mute: boolean; solo: boolean }> = {};
+config.services.forEach((p) => {
+  serviceFlags[p.name] = { mute: false, solo: false };
+});
+
 // --- If a dockerCompose file is specified, handle it.
 if (config.dockerCompose) {
   console.log("Using docker compose...");
@@ -135,6 +142,8 @@ if (config.dockerCompose) {
           cmd: "docker",
           args: ["compose", "-f", composePath, "logs", "-f", serviceName],
         });
+        // Initialize flags for the additional service.
+        serviceFlags[serviceName] = { mute: false, solo: false };
       });
     } else {
       console.error(
@@ -175,7 +184,7 @@ config.services.forEach((p, i) => {
   assignedProcessColors[p.name] = colorMapping[colorName];
 });
 
-// --- Global Log & Filter Handling (unchanged) ---
+// --- Global Log & Filter Handling (unchanged except for new filtering) ---
 interface LogEntry {
   process: string;
   text: string;
@@ -183,13 +192,21 @@ interface LogEntry {
 
 let allLogs: LogEntry[] = [];
 let currentFilter: string = "";
-let soloProcess: string | null = null;
 
 function updateLogDisplay(): void {
   let entries = allLogs;
-  if (soloProcess) {
-    entries = entries.filter((entry) => entry.process === soloProcess);
+
+  // If any service is marked solo, only display logs from those services.
+  const soloServices = Object.keys(serviceFlags).filter(
+    (name) => serviceFlags[name].solo,
+  );
+  if (soloServices.length > 0) {
+    entries = entries.filter((entry) => soloServices.includes(entry.process));
   }
+
+  // Filter out logs from muted services.
+  entries = entries.filter((entry) => !serviceFlags[entry.process]?.mute);
+
   if (currentFilter.trim() !== "") {
     try {
       const re = new RegExp(currentFilter, "gi");
@@ -258,7 +275,8 @@ const statusBar = blessed.box({
   left: 0,
   width: "100%",
   height: 1,
-  content: "Press 'q' to quit. '/' to filter, 's' to solo, 'r' to restart.",
+  content:
+    "Press 'q' to quit. '/' to filter, 's' for solo process modal, 'r' to restart, 'f' for service control.",
   style: { fg: "white", bg: "blue" },
 });
 
@@ -354,6 +372,8 @@ function launchProcess(procConfig: ProcessConfig): ChildProcess {
   proc.on("close", (code) => {
     addLogEntry(procConfig.name, `exited with code ${code}`);
     delete runningProcessesMap[procConfig.name];
+    // Optionally mark the process as not running.
+    processStatus[procConfig.name] = false;
   });
 
   return proc;
@@ -372,6 +392,8 @@ async function startProcess(procConfig: ProcessConfig): Promise<ChildProcess> {
   }
   const proc = launchProcess(procConfig);
   runningProcessesMap[procConfig.name] = proc;
+  // Mark process as running (true) immediately.
+  processStatus[procConfig.name] = true;
   if (procConfig.ready) {
     addLogEntry(procConfig.name, "Performing ready check...");
     try {
@@ -383,9 +405,92 @@ async function startProcess(procConfig: ProcessConfig): Promise<ChildProcess> {
   } else {
     addLogEntry(procConfig.name, "No ready check defined; marking as ready.");
   }
-  processStatus[procConfig.name] = true;
   return proc;
 }
+
+// --- Functions for Service Control Modal ---
+// Helper to return formatted text for the service list with state.
+function getServiceItemText(proc: ProcessConfig): string {
+  const isRunning = runningProcessesMap[proc.name] ? "Running" : "Stopped";
+  const flags = [];
+  if (serviceFlags[proc.name].mute) {
+    flags.push("Muted");
+  }
+  if (serviceFlags[proc.name].solo) {
+    flags.push("Solo");
+  }
+  const flagText = flags.length ? ` (${flags.join(", ")})` : "";
+  return `${proc.name} - ${isRunning}${flagText}`;
+}
+
+// Toggle mute flag for the service at the selected list index.
+function toggleMuteForSelected(list: blessed.Widgets.ListElement) {
+  console.log("list", list);
+  const index = (list as any).selected;
+  if (index < 0 || index >= config.services.length) return;
+  const proc = config.services[index];
+  serviceFlags[proc.name].mute = !serviceFlags[proc.name].mute;
+  addLogEntry(
+    "SYSTEM",
+    `${proc.name} is now ${serviceFlags[proc.name].mute ? "muted" : "unmuted"}.`,
+  );
+  list.setItem(index, getServiceItemText(proc));
+  updateLogDisplay();
+  screen.render();
+}
+
+// Toggle solo flag for the service at the selected list index.
+function toggleSoloForSelected(list: blessed.Widgets.ListElement) {
+  console.log("list", list);
+  const index = (list as any).selected;
+  if (index < 0 || index >= config.services.length) return;
+  const proc = config.services[index];
+  serviceFlags[proc.name].solo = !serviceFlags[proc.name].solo;
+  addLogEntry(
+    "SYSTEM",
+    `${proc.name} is now ${serviceFlags[proc.name].solo ? "solo" : "unsolo"}.`,
+  );
+  list.setItem(index, getServiceItemText(proc));
+  updateLogDisplay();
+  screen.render();
+}
+
+// Opens a modal list showing all services with their current state.
+// Within the modal, use j/k to navigate and press "m" to toggle mute or "s" to toggle solo.
+function openServiceControlModal() {
+  const items = config.services.map((proc) => getServiceItemText(proc));
+  const list = blessed.list({
+    parent: screen,
+    border: "line",
+    label: " Service Control (m: mute, s: solo) ",
+    width: "50%",
+    height: config.services.length + 4,
+    top: "center",
+    left: "center",
+    items: items,
+    keys: true,
+    vi: true,
+    mouse: true,
+    style: { selected: { bg: "blue" } },
+  });
+  list.focus();
+  // Bind mute and solo actions within the modal.
+  list.key("m", () => {
+    toggleMuteForSelected(list);
+  });
+  list.key("s", () => {
+    toggleSoloForSelected(list);
+  });
+  // Allow closing the modal.
+  list.key(["escape", "q"], () => {
+    list.destroy();
+    screen.render();
+  });
+  screen.render();
+}
+
+// Bind key "f" to open the new service control modal.
+screen.key("f", openServiceControlModal);
 
 // --- Key Bindings & Cleanup ---
 function cleanup() {
@@ -428,6 +533,7 @@ screen.key("/", () => {
   });
 });
 
+// Original solo process modal remains on "s" (if you wish to remove it, delete this handler).
 screen.key("s", () => {
   const choices = ["All services", ...config.services.map((p) => p.name)];
   const list = blessed.list({
@@ -447,7 +553,15 @@ screen.key("s", () => {
   list.focus();
   list.once("select", (item, index) => {
     list.destroy();
-    soloProcess = index === 0 ? null : choices[index];
+    // In this older implementation, soloProcess is replaced by our serviceFlags.
+    // For backward compatibility, you might clear all solo flags first.
+    Object.keys(serviceFlags).forEach(
+      (name) => (serviceFlags[name].solo = false),
+    );
+    if (index > 0) {
+      const procName = choices[index];
+      serviceFlags[procName].solo = true;
+    }
     updateLogDisplay();
   });
   screen.render();
