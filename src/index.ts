@@ -11,6 +11,25 @@ import * as net from "net";
 // Set a simpler terminal to avoid some escape sequence issues.
 process.env.TERM = "xterm";
 
+// --- Determine configuration file path ---
+// Look for a "-C" flag and use that file; otherwise default to "muxd.config.json" in the current working directory.
+const args = process.argv.slice(2);
+let configFilePath: string;
+const configFlagIndex = args.indexOf("-C");
+
+if (configFlagIndex !== -1 && args[configFlagIndex + 1]) {
+  configFilePath = path.resolve(process.cwd(), args[configFlagIndex + 1]);
+} else {
+  configFilePath = path.resolve(process.cwd(), "muxd.config.json");
+}
+
+if (!fs.existsSync(configFilePath)) {
+  console.error("Configuration file not found:", configFilePath);
+  process.exit(1);
+}
+
+const configContent = fs.readFileSync(configFilePath, "utf8");
+
 // --- Configuration Interfaces ---
 
 interface ReadyCheck {
@@ -33,9 +52,6 @@ interface Config {
   processes: ProcessConfig[];
 }
 
-// --- Load configuration from config.json ---
-const configPath = path.resolve(__dirname, "config.json");
-const configContent = fs.readFileSync(configPath, "utf8");
 const config: Config = JSON.parse(configContent);
 
 // Build a mapping for process configurations keyed by process name.
@@ -401,7 +417,7 @@ function startMaster() {
   }
   ipcServer = net.createServer((socket) => {
     ipcClients.push(socket);
-    // **When a client connects, immediately send the full log history.**
+    // When a client connects, immediately send the full log history.
     const historyMessage = JSON.stringify({ type: "history", data: allLogs });
     socket.write(historyMessage + "\n");
     socket.on("data", (data) => {

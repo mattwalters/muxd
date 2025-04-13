@@ -2,19 +2,22 @@
   "name": "muxd",
   "version": "0.1.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "dev": "npx src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc"
+  },
+  "bin": {
+    "muxd": "./dist/index.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mattwalters/muxd.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "Matthew Walters",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/mattwalters/muxd/issues"
   },
