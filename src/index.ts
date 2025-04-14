@@ -30,10 +30,10 @@ interface ProcessConfig {
   ready?: ReadyCheck;
 }
 
-interface Config {
-  services: ProcessConfig[];
-  dockerCompose?: { file: string; profile?: string };
-}
+//interface Config {
+//  services: ProcessConfig[];
+//  dockerCompose?: { file: string; profile?: string };
+//}
 
 // --- Determine configuration file path ---
 // Look for a "-C" flag and use that file; otherwise default to "muxd.config.json" in the current working directory.
@@ -276,7 +276,7 @@ const statusBar = blessed.box({
   width: "100%",
   height: 1,
   content:
-    "Press 'q' to quit. '/' to filter, 's' for solo process modal, 'r' to restart, 'f' for service control.",
+    "Press 'q' to quit. '/' to filter, 'r' to restart, 'f' for service control.",
   style: { fg: "white", bg: "blue" },
 });
 
@@ -526,7 +526,7 @@ screen.key("/", () => {
     keys: true,
     vi: true,
   });
-  prompt.input("Regex filter:", currentFilter, (err, value) => {
+  prompt.input("Regex filter:", currentFilter, (_err, value) => {
     if (value !== undefined) currentFilter = value.trim();
     prompt.destroy();
     updateLogDisplay();
@@ -550,7 +550,7 @@ screen.key("r", () => {
     style: { selected: { bg: "blue" } },
   });
   list.focus();
-  list.once("select", (item, index) => {
+  list.once("select", (_item, index) => {
     list.destroy();
     const processName = choices[index];
     restartProcess(processName);
@@ -678,7 +678,7 @@ const clientSocket = net.createConnection({ path: sockPath }, () => {
   // If we connect, run as client.
   startClient(clientSocket);
 });
-clientSocket.on("error", (err) => {
+clientSocket.on("error", (_err) => {
   // If connection fails, assume no master is running.
   startMaster();
 });
