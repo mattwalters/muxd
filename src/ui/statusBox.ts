@@ -20,6 +20,7 @@ export class StatusBox {
       vi: true,
       label: " Service Status ",
       content: "",
+      tags: true,
     });
     this.screen.append(this.box);
   }
