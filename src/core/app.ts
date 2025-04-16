@@ -34,9 +34,9 @@ export class App {
     // Setup key bindings
     setupKeyBindings(this.ui, this.processManager, this.logStore, this.config);
 
-    // Connect log store events to UI
-    this.setupLogHandlers();
+    // ui and processManager and LogStore should all exist now.
     this.setupProcessHandlers();
+    this.setupLogHandlers();
 
     // Register cleanup handlers (we'll update this after IPC is initialized)
     this.registerBasicCleanupHandlers();
@@ -76,10 +76,19 @@ export class App {
   private setupProcessHandlers() {
     this.processManager.on(
       this.processManager.STATUS_CHANGE_EVENT_NAME,
-      (processName, isRunning) => {
+      (processName: string, isRunning: boolean) => {
         this.ui.statusBox.updateStatus(processName, isRunning);
       },
     );
+    this.processManager.on(
+      this.processManager.INITIALIZE_SERVICE_EVENT_NAME,
+      (processName) => {
+        this.ui.statusBox.initializeService(processName);
+        //
+      },
+    );
+
+    this.processManager.initializeServices();
   }
 
   private setupLogHandlers() {

@@ -10,6 +10,7 @@ export class ProcessManager extends EventEmitter {
   private processStatus: Record<string, boolean> = {};
   private serviceFlags: Record<string, { mute: boolean; solo: boolean }> = {};
   STATUS_CHANGE_EVENT_NAME = "status-change";
+  INITIALIZE_SERVICE_EVENT_NAME = "initialize-service";
 
   constructor(config: Config, logStore: LogStore) {
     super();
@@ -20,6 +21,12 @@ export class ProcessManager extends EventEmitter {
     config.services.forEach((proc) => {
       this.processStatus[proc.name] = false;
       this.serviceFlags[proc.name] = { mute: false, solo: false };
+    });
+  }
+
+  initializeServices() {
+    this.config.services.forEach((proc) => {
+      this.emit(this.INITIALIZE_SERVICE_EVENT_NAME, proc.name);
     });
   }
 
@@ -240,7 +247,7 @@ export class ProcessManager extends EventEmitter {
     this.processStatus[processName] = isRunning;
 
     if (oldStatus !== isRunning) {
-      this.emit(STATUS_CHANGE_KEY, processName, isRunning);
+      this.emit(this.STATUS_CHANGE_EVENT_NAME, processName, isRunning);
     }
   }
 }
