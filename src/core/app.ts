@@ -36,6 +36,7 @@ export class App {
 
     // Connect log store events to UI
     this.setupLogHandlers();
+    this.setupProcessHandlers();
 
     // Register cleanup handlers (we'll update this after IPC is initialized)
     this.registerBasicCleanupHandlers();
@@ -70,6 +71,15 @@ export class App {
         this.ipcController,
       );
     }
+  }
+
+  private setupProcessHandlers() {
+    this.processManager.on(
+      this.processManager.STATUS_CHANGE_EVENT_NAME,
+      (processName, isRunning) => {
+        this.ui.statusBox.updateStatus(processName, isRunning);
+      },
+    );
   }
 
   private setupLogHandlers() {

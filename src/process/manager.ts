@@ -1,16 +1,18 @@
-import { ChildProcess } from "child_process";
+import { ChildProcess, spawn } from "child_process";
 import { Config, ProcessConfig, ReadyCheck } from "../config/schema";
-import { launchProcess } from "./launcher";
 import { LogStore } from "../log/store";
+import EventEmitter from "events";
 
-export class ProcessManager {
+export class ProcessManager extends EventEmitter {
   private config: Config;
   private logStore: LogStore;
   private runningProcesses: Record<string, ChildProcess> = {};
   private processStatus: Record<string, boolean> = {};
   private serviceFlags: Record<string, { mute: boolean; solo: boolean }> = {};
+  STATUS_CHANGE_EVENT_NAME = "status-change";
 
   constructor(config: Config, logStore: LogStore) {
+    super();
     this.config = config;
     this.logStore = logStore;
 
@@ -72,20 +74,23 @@ export class ProcessManager {
       this.logStore.addLog(procConfig.name, "Dependencies are ready.");
     }
 
-    const proc = launchProcess(procConfig, (data: Buffer, isError: boolean) => {
-      const lines = data.toString().split("\n");
-      lines.forEach((line) => {
-        if (line.trim() !== "") {
-          this.logStore.addLog(
-            procConfig.name,
-            isError ? `ERROR: ${line.trimEnd()}` : line.trimEnd(),
-          );
-        }
-      });
-    });
+    const proc = this.spawnProcess(
+      procConfig,
+      (data: Buffer, isError: boolean) => {
+        const lines = data.toString().split("\n");
+        lines.forEach((line) => {
+          if (line.trim() !== "") {
+            this.logStore.addLog(
+              procConfig.name,
+              isError ? `ERROR: ${line.trimEnd()}` : line.trimEnd(),
+            );
+          }
+        });
+      },
+    );
 
     this.runningProcesses[procConfig.name] = proc;
-    this.processStatus[procConfig.name] = true;
+    this.updateProcessStatus(procConfig.name, true);
 
     proc.on("close", (code) => {
       this.logStore.addLog(procConfig.name, `exited with code ${code}`);
@@ -209,5 +214,33 @@ export class ProcessManager {
         }
       }, intervalMs);
     });
+  }
+  private spawnProcess(
+    procConfig: ProcessConfig,
+    onData: (data: Buffer, isError: boolean) => void,
+  ): ChildProcess {
+    const proc = spawn(procConfig.cmd, procConfig.args ?? [], {
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+    });
+
+    proc.stdout.on("data", (data: Buffer) => {
+      onData(data, false);
+    });
+
+    proc.stderr.on("data", (data: Buffer) => {
+      onData(data, true);
+    });
+
+    return proc;
+  }
+
+  private updateProcessStatus(processName: string, isRunning: boolean): void {
+    const oldStatus = this.processStatus[processName];
+    this.processStatus[processName] = isRunning;
+
+    if (oldStatus !== isRunning) {
+      this.emit(STATUS_CHANGE_KEY, processName, isRunning);
+    }
   }
 }

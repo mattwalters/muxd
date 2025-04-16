@@ -12,7 +12,7 @@ export class LogBox {
     this.box = blessed.box({
       top: 0,
       left: 0,
-      width: "100%",
+      width: "75%",
       height: "100%-1",
       border: { type: "line" },
       scrollbar: { ch: " " },
@@ -25,7 +25,7 @@ export class LogBox {
       content: "",
     });
 
-    screen.append(this.box);
+    this.screen.append(this.box);
   }
 
   // Initialize color mapping for processes

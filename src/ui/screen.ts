@@ -1,6 +1,7 @@
 import blessed from "blessed";
 import { LogBox } from "./logBox";
 import { StatusBar } from "./statusBar";
+import { StatusBox } from "./statusBox";
 
 // Setup the main blessed screen
 export function setupScreen() {
@@ -13,6 +14,8 @@ export function setupScreen() {
   // Create the log box
   const logBox = new LogBox(screen);
 
+  const statusBox = new StatusBox(screen);
+
   // Create the status bar
   const statusBar = new StatusBar(screen);
 
@@ -21,6 +24,7 @@ export function setupScreen() {
   return {
     screen,
     logBox,
+    statusBox,
     statusBar,
   };
 }
