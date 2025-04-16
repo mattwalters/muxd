@@ -16,6 +16,7 @@ export function startClient(
 
   // Handle incoming messages from the master
   clientSocket.on("data", (data) => {
+    console.log("client is receiving data");
     // Assume each JSON message is separated by a newline
     const messages = data
       .toString()

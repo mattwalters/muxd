@@ -17,6 +17,7 @@ export function setupScreen() {
   const statusBar = new StatusBar(screen);
 
   // Return the screen and components
+  screen.render();
   return {
     screen,
     logBox,
