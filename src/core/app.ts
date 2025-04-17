@@ -80,15 +80,9 @@ export class App {
         this.ui.statusBox.updateStatus(processName, isRunning);
       },
     );
-    this.processManager.on(
-      this.processManager.INITIALIZE_SERVICE_EVENT_NAME,
-      (processName) => {
-        this.ui.statusBox.initializeService(processName);
-        //
-      },
-    );
-
-    this.processManager.initializeServices();
+    this.processManager.forEachService((proc) => {
+      this.ui.statusBox.initializeService(proc);
+    });
   }
 
   private setupLogHandlers() {

@@ -20,7 +20,6 @@ export class ProcessManager extends EventEmitter {
   private serviceFlags: Record<string, { mute: boolean; solo: boolean }> = {};
   private serviceColors: Record<string, string> = {};
   STATUS_CHANGE_EVENT_NAME = "status-change";
-  INITIALIZE_SERVICE_EVENT_NAME = "initialize-service";
 
   constructor(config: Config, logStore: LogStore) {
     super();
@@ -36,9 +35,9 @@ export class ProcessManager extends EventEmitter {
     });
   }
 
-  initializeServices() {
+  forEachService(callback: (p: ProcessConfig) => void) {
     this.config.services.forEach((proc) => {
-      this.emit(this.INITIALIZE_SERVICE_EVENT_NAME, proc.name);
+      callback(proc);
     });
   }
 
