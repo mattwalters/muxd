@@ -15,6 +15,7 @@ export const ProcessConfigSchema = z.object({
   args: z.array(z.string()).optional(),
   dependsOn: z.array(z.string()).optional(),
   ready: ReadyCheckSchema.optional(),
+  color: z.string().optional(),
 });
 
 export const DockerComposeSchema = z.object({

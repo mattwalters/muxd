@@ -3,12 +3,22 @@ import { Config, ProcessConfig, ReadyCheck } from "../config/schema";
 import { LogStore } from "../log/store";
 import EventEmitter from "events";
 
+const colorMapping = [
+  "#FF0000",
+  "#FFFF00",
+  "#00FF00",
+  "#0000FF",
+  "#FF00FF",
+  "#00FFFF",
+];
+
 export class ProcessManager extends EventEmitter {
   private config: Config;
   private logStore: LogStore;
   private runningProcesses: Record<string, ChildProcess> = {};
   private processStatus: Record<string, boolean> = {};
   private serviceFlags: Record<string, { mute: boolean; solo: boolean }> = {};
+  private serviceColors: Record<string, string> = {};
   STATUS_CHANGE_EVENT_NAME = "status-change";
   INITIALIZE_SERVICE_EVENT_NAME = "initialize-service";
 
@@ -18,9 +28,11 @@ export class ProcessManager extends EventEmitter {
     this.logStore = logStore;
 
     // Initialize process status and flags
-    config.services.forEach((proc) => {
+    config.services.forEach((proc, i) => {
       this.processStatus[proc.name] = false;
       this.serviceFlags[proc.name] = { mute: false, solo: false };
+      this.serviceColors[proc.name] =
+        proc.color ?? colorMapping[i % colorMapping.length];
     });
   }
 
@@ -28,6 +40,10 @@ export class ProcessManager extends EventEmitter {
     this.config.services.forEach((proc) => {
       this.emit(this.INITIALIZE_SERVICE_EVENT_NAME, proc.name);
     });
+  }
+
+  getColor(serviceName: string) {
+    return this.serviceColors[serviceName];
   }
 
   // Get process flags (mute/solo)
