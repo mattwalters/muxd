@@ -33,7 +33,6 @@ export class App {
   async start() {
     // Initialize IPC (master or client mode)
     this.ipcController = await initializeIPC(this.logStore);
-    console.log("ipcController", this.ipcController);
 
     // Update cleanup handlers with IPC controller
     this.registerFullCleanupHandlers();

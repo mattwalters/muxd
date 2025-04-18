@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
 import { execSync } from "child_process";
-import { Config, ConfigSchema, ProcessConfig } from "./schema";
+import { Config, ConfigSchema } from "./schema";
 
 // Determine configuration file path from command line args
 function getConfigFilePath(): string {
@@ -31,7 +31,6 @@ const chooseColor = (index: number) =>
 // Load and validate the configuration file
 export function loadConfig(): Config {
   const configFilePath = getConfigFilePath();
-  console.log("configFilePath", configFilePath);
 
   if (!fs.existsSync(configFilePath)) {
     console.error("Configuration file not found:", configFilePath);
@@ -61,7 +60,6 @@ export function loadConfig(): Config {
 
 // Process docker-compose configuration
 function processDockerComposeConfig(config: Config): void {
-  console.log("Using docker compose...");
   const composePath = path.resolve(process.cwd(), config.dockerCompose!.file);
 
   if (!fs.existsSync(composePath)) {
@@ -69,17 +67,13 @@ function processDockerComposeConfig(config: Config): void {
     process.exit(1);
   }
 
-  console.log(`Using docker-compose file: ${composePath}`);
-
   // Start docker-compose services
   try {
-    console.log("Starting docker compose services...");
     let profile = config.dockerCompose?.profile ?? "";
     if (profile) {
       profile = ` --profile ${profile}`;
     }
     const dockerCommand = `docker compose${profile} -f "${composePath}" up -d`;
-    console.log("dockerCompose aaaaaa", dockerCommand);
     execSync(dockerCommand, {
       stdio: "inherit",
     });
