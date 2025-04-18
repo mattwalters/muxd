@@ -20,7 +20,7 @@ export class StatusBox {
       keys: true,
       mouse: true,
       vi: true,
-      label: " Service Status ",
+      label: " Services ",
       content: "",
       tags: true,
     });
