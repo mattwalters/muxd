@@ -114,11 +114,17 @@ export class ProcessManager extends EventEmitter {
 
     this.runningProcesses[procConfig.name] = proc;
 
-    proc.on("close", (code) => {
-      this.logStore.addLog(procConfig.name, `exited with code ${code}`);
+    proc.on("close", (code: number | null, signal: string | null) => {
+      // Log exit with code and signal
+      let msg = `exited with code ${code}`;
+      if (signal) msg += ` and signal ${signal}`;
+      this.logStore.addLog(procConfig.name, msg);
+      // Clean up running process mapping
       delete this.runningProcesses[procConfig.name];
-      const newState = code === 0 ? ProcessState.STOPPED : ProcessState.FAILED;
-      this.updateProcessStatus(procConfig.name, newState);
+      // Only treat non-zero exit codes as failure; manual kills (signal) or zero codes are stopped
+      const exitedWithError = code !== null && code !== 0;
+      const finalState = exitedWithError ? ProcessState.FAILED : ProcessState.STOPPED;
+      this.updateProcessStatus(procConfig.name, finalState);
     });
 
     if (procConfig.ready) {
@@ -132,7 +138,8 @@ export class ProcessManager extends EventEmitter {
           procConfig.name,
           `Ready check failed: ${err.message}`,
         );
-        this.updateProcessStatus(procConfig.name, ProcessState.FAILED);
+        // Do not mark failed on ready check; only non-zero exit codes should be failed
+        this.updateProcessStatus(procConfig.name, ProcessState.STOPPED);
       }
     } else {
       this.logStore.addLog(
@@ -153,17 +160,20 @@ export class ProcessManager extends EventEmitter {
     }
 
     this.logStore.addSystemLog(`Restarting process ${processName}...`);
-    this.updateProcessStatus(processName, ProcessState.RESTARTING);
-
     const currentProc = this.runningProcesses[processName];
+    // Indicate stopping if process is running
     if (currentProc && !currentProc.killed) {
+      this.updateProcessStatus(processName, ProcessState.STOPPING);
       try {
         currentProc.kill();
       } catch (err) {
         console.error("Error killing process", processName, err);
       }
+      // Wait for the process to close before restarting
+      await new Promise<void>((resolve) => currentProc.once("close", () => resolve()));
     }
-
+    // Now restart
+    this.updateProcessStatus(processName, ProcessState.RESTARTING);
     try {
       await this.startProcess(procConfig);
     } catch (err: any) {
