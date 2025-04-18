@@ -5,7 +5,12 @@ import { ProcessConfig } from "../config/schema";
 export class RestartPrompt {
   private screen: blessed.Widgets.Screen;
   private processManager: ProcessManager;
-  private modal: blessed.Widgets.ListElement | null = null;
+  private container: blessed.Widgets.BoxElement | null = null;
+  private filterText: blessed.Widgets.TextElement | null = null;
+  private list: blessed.Widgets.ListElement | null = null;
+  private services: ProcessConfig[] = [];
+  private filteredServices: ProcessConfig[] = [];
+  private filter: string = "";
 
   constructor(screen: blessed.Widgets.Screen, processManager: ProcessManager) {
     this.screen = screen;
@@ -13,44 +18,111 @@ export class RestartPrompt {
   }
 
   open(services: ProcessConfig[]): void {
-    if (this.modal) {
+    if (this.container) {
       this.close();
     }
+    this.services = services;
+    this.filteredServices = services;
+    this.filter = "";
+    const names = services.map((proc) => proc.name);
 
-    const items = services.map((proc) => proc.name);
-    this.modal = blessed.list({
+    this.container = blessed.box({
       parent: this.screen,
       border: "line",
-      label: " Restart Process (Select One) ",
+      label: " Restart Process (type to filter, j/k to navigate) ",
       width: "50%",
-      height: items.length + 2,
+      height: names.length + 4,
       top: "center",
       left: "center",
-      items,
       keys: true,
-      vi: true,
+      mouse: true,
+      style: { border: { fg: "white" } },
+    });
+
+    this.filterText = blessed.text({
+      parent: this.container,
+      top: 0,
+      left: 1,
+      content: "Filter: ",
+      height: 1,
+    });
+
+    this.list = blessed.list({
+      parent: this.container,
+      top: 1,
+      left: 1,
+      width: "100%-2",
+      height: "100%-1",
+      items: names,
       mouse: true,
       style: { selected: { bg: "blue" } },
+      scrollable: true,
+      alwaysScroll: true,
+      keys: false,
+      vi: false,
     });
 
-    this.modal.focus();
-    this.modal.once("select", (_item, index) => {
-      const processName = services[index].name;
-      this.processManager.restartProcess(processName);
-      this.close();
-    });
-    this.modal.key(["escape", "q"], () => {
-      this.close();
+    this.container.focus();
+    this.container.on("keypress", (ch: string, key: any) => {
+      if (!this.container || !this.list || !this.filterText) {
+        return;
+      }
+      switch (key.name) {
+        case "escape":
+        case "q":
+          this.close();
+          return;
+        case "enter":
+          if (this.filteredServices.length > 0) {
+            const idx = this.list.selected;
+            console.error("idx", idx);
+            const processName = this.filteredServices[idx].name;
+            this.processManager.restartProcess(processName);
+            this.close();
+          }
+          return;
+        case "backspace":
+          this.filter = this.filter.slice(0, -1);
+          break;
+        default:
+          if (ch && ch.length === 1 && !key.ctrl && !key.meta) {
+            this.filter += ch;
+          } else {
+            return;
+          }
+      }
+      this.updateList();
+      this.screen.render();
     });
 
+    this.updateList();
     this.screen.render();
   }
 
   close(): void {
-    if (this.modal) {
-      this.modal.destroy();
-      this.modal = null;
+    if (this.container) {
+      this.container.destroy();
+      this.container = null;
+      this.filterText = null;
+      this.list = null;
       this.screen.render();
     }
+  }
+
+  private updateList(): void {
+    if (!this.list || !this.filterText) {
+      return;
+    }
+    this.filterText.setContent(`Filter: ${this.filter}`);
+    this.filteredServices = this.services.filter((proc) =>
+      proc.name.toLowerCase().includes(this.filter.toLowerCase()),
+    );
+    const names = this.filteredServices.map((proc) => proc.name);
+    if (names.length === 0) {
+      this.list.setItems(["<no matches>"]);
+    } else {
+      this.list.setItems(names);
+    }
+    this.list.select(0);
   }
 }
