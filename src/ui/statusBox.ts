@@ -14,6 +14,7 @@ export class StatusBox {
       width: "25%",
       height: "100%-1",
       border: { type: "line" },
+      padding: 1,
       scrollbar: { ch: " " },
       alwaysScroll: true,
       scrollable: true,
@@ -40,21 +41,15 @@ export class StatusBox {
 
   private renderServiceStatuses() {
     let content = "";
-
-    // Convert the Map entries to an array and sort by service name
-    const serviceNames = Object.keys(this.serviceToState);
-
-    // Generate the content for each service
-    for (const serviceName of serviceNames) {
+    for (const serviceName of Object.keys(this.serviceToState)) {
       const isRunning = this.serviceToState[serviceName];
-      const statusText = isRunning ? "RUNNING" : "STOPPED";
+      const statusText = isRunning ? "HEALTHY" : "STOPPED";
       const statusColor = isRunning ? "{green-fg}" : "{red-fg}";
 
       const serviceColor = `{${this.serviceToColor[serviceName]}-fg}`;
-      content += `${serviceColor}${serviceName}{/}: ${statusColor}${statusText}{/}\n`;
+      content += `${serviceColor}[${serviceName}]{/} ${statusColor}${statusText}{/}\n`;
     }
 
-    // Update the box content
     this.box.setContent(content);
     this.screen.render();
   }

@@ -2,6 +2,16 @@
 
 import { ChildProcess } from "child_process";
 
+export enum ProcessState {
+  PENDING = "PENDING", // Process is initialized but not started yet
+  STARTING = "STARTING", // Process has been started but not ready
+  HEALTHY = "HEALTHY", // Process is running and ready
+  STOPPING = "STOPPING", // Process is being gracefully stopped
+  STOPPED = "STOPPED", // Process is not running
+  FAILED = "FAILED", // Process exited with error or health check failed
+  RESTARTING = "RESTARTING", // Process is being restarted
+}
+
 // Interface for process status
 export interface ProcessStatus {
   name: string;
