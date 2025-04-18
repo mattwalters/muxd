@@ -1,9 +1,11 @@
 import blessed from "blessed";
+import { ProcessConfig } from "../config/schema";
 
 export class StatusBox {
   private box: blessed.Widgets.BoxElement;
   private screen: blessed.Widgets.Screen;
   private serviceToState: Record<string, boolean> = {};
+  private serviceToColor: Record<string, string> = {};
   constructor(screen: blessed.Widgets.Screen) {
     this.screen = screen;
     this.box = blessed.box({
@@ -30,8 +32,9 @@ export class StatusBox {
     this.renderServiceStatuses();
   }
 
-  initializeService(serviceName: string, initialStatus = false) {
-    this.serviceToState[serviceName] = initialStatus;
+  initializeService(proc: ProcessConfig) {
+    this.serviceToState[proc.name] = false;
+    this.serviceToColor[proc.name] = proc.color!;
     this.renderServiceStatuses();
   }
 
@@ -47,7 +50,9 @@ export class StatusBox {
       const statusText = isRunning ? "RUNNING" : "STOPPED";
       const statusColor = isRunning ? "{green-fg}" : "{red-fg}";
 
-      content += `${serviceName}: ${statusColor}${statusText}{/}\n`;
+      const serviceColor = `{${this.serviceToColor[serviceName]}-fg}`;
+      console.log("serviceColor", serviceColor);
+      content += `${serviceColor}${serviceName}{/}: ${statusColor}${statusText}{/}\n`;
     }
 
     // Update the box content

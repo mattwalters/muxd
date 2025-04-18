@@ -1,47 +1,18 @@
 import chalk from "chalk";
 import { LogEntry } from "./store";
 
-// Interface to track color assignments
-interface ColorMap {
-  [processName: string]: string;
-}
-
-// Map of color names to hex values
-const colorMapping: Record<string, string> = {
-  red: "#FF0000",
-  yellow: "#FFFF00",
-  green: "#00FF00",
-  blue: "#0000FF",
-  magenta: "#FF00FF",
-  cyan: "#00FFFF",
-};
-
-// Get a color name by index
-function getColorName(index: number): string {
-  const keys = Object.keys(colorMapping);
-  return keys[index % keys.length];
-}
-
-// Create process color mapping
-export function createProcessColorMap(processNames: string[]): ColorMap {
-  const colorMap: ColorMap = {};
-
-  processNames.forEach((name, i) => {
-    const colorName = getColorName(i);
-    colorMap[name] = colorMapping[colorName];
-  });
-
-  return colorMap;
-}
+// Type for process color getter function
+export type ColorGetter = (processName: string) => string;
 
 // Format a log entry
 export function formatLogEntry(
   entry: LogEntry,
-  colorMap: ColorMap,
+  getColor: ColorGetter,
   filter?: string,
 ): string {
-  let line = colorMap[entry.process]
-    ? chalk.hex(colorMap[entry.process])(`[${entry.process}] `) + entry.text
+  const color = getColor(entry.process);
+  let line = color
+    ? chalk.hex(color)(`[${entry.process}] `) + entry.text
     : `[${entry.process}] ` + entry.text;
 
   if (filter && filter.trim() !== "") {
@@ -59,10 +30,10 @@ export function formatLogEntry(
 // Format multiple log entries
 export function formatLogEntries(
   entries: LogEntry[],
-  colorMap: ColorMap,
+  getColor: ColorGetter,
   filter?: string,
 ): string {
   return entries
-    .map((entry) => formatLogEntry(entry, colorMap, filter))
+    .map((entry) => formatLogEntry(entry, getColor, filter))
     .join("\n");
 }

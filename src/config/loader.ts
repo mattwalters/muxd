@@ -16,6 +16,18 @@ function getConfigFilePath(): string {
   }
 }
 
+const colorMapping = [
+  "#FF0000",
+  "#FFFF00",
+  "#00FF00",
+  "#0000FF",
+  "#FF00FF",
+  "#00FFFF",
+];
+
+const chooseColor = (index: number) =>
+  colorMapping[index % colorMapping.length];
+
 // Load and validate the configuration file
 export function loadConfig(): Config {
   const configFilePath = getConfigFilePath();
@@ -35,7 +47,9 @@ export function loadConfig(): Config {
   }
 
   const config = parsedConfig.data;
-  console.log("config", config);
+  config.services.forEach((service, index) => {
+    service.color = service.color ?? colorMapping[index % colorMapping.length];
+  });
 
   // Handle docker-compose if specified
   if (config.dockerCompose) {

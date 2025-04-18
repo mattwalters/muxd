@@ -3,17 +3,11 @@ import { Config, ProcessConfig, ReadyCheck } from "../config/schema";
 import { LogStore } from "../log/store";
 import EventEmitter from "events";
 
-const colorMapping = [
-  "#FF0000",
-  "#FFFF00",
-  "#00FF00",
-  "#0000FF",
-  "#FF00FF",
-  "#00FFFF",
-];
+const ansiColors = ["yellow", "blue", "magenta", "cyan"];
 
 export class ProcessManager extends EventEmitter {
   private config: Config;
+  private services: (ProcessConfig & { color: string })[];
   private logStore: LogStore;
   private runningProcesses: Record<string, ChildProcess> = {};
   private processStatus: Record<string, boolean> = {};
@@ -25,18 +19,16 @@ export class ProcessManager extends EventEmitter {
     super();
     this.config = config;
     this.logStore = logStore;
-
-    // Initialize process status and flags
-    config.services.forEach((proc, i) => {
-      this.processStatus[proc.name] = false;
-      this.serviceFlags[proc.name] = { mute: false, solo: false };
-      this.serviceColors[proc.name] =
-        proc.color ?? colorMapping[i % colorMapping.length];
+    this.services = config.services.map((s, index) => {
+      const color = s.color ?? ansiColors[index % ansiColors.length];
+      this.serviceColors[s.name] = color;
+      this.serviceFlags[s.name] = { mute: false, solo: false };
+      return { ...s, color };
     });
   }
 
-  forEachService(callback: (p: ProcessConfig) => void) {
-    this.config.services.forEach((proc) => {
+  forEachService(callback: (p: ProcessConfig & { color: string }) => void) {
+    this.services.forEach((proc) => {
       callback(proc);
     });
   }

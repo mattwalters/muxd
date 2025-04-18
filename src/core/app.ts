@@ -17,19 +17,15 @@ export class App {
   constructor() {
     // Load configuration
     this.config = loadConfig();
-    console.log("this.config", this.config);
 
     // Initialize the UI and store all UI components
     this.ui = setupScreen();
-    console.log("setupScreen");
 
     // Initialize the log store
     this.logStore = new LogStore();
-    console.log("logstore");
 
     // Initialize the process manager
     this.processManager = new ProcessManager(this.config, this.logStore);
-    console.log("processManager", this.processManager);
 
     // Setup key bindings
     setupKeyBindings(this.ui, this.processManager, this.logStore, this.config);
@@ -86,8 +82,8 @@ export class App {
   }
 
   private setupLogHandlers() {
-    // Initialize color map for process names
-    this.ui.logBox.initColorMap(this.config.services.map((s) => s.name));
+    // Pass the process manager to the log box for color mapping
+    this.ui.logBox.setProcessManager(this.processManager);
 
     // Update logs when added or filter changes
     const updateLogs = () => {

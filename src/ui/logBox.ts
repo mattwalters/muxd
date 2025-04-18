@@ -1,11 +1,12 @@
 import blessed from "blessed";
 import { LogEntry } from "../log/store";
-import { formatLogEntries, createProcessColorMap } from "../log/formatter";
+import { formatLogEntries } from "../log/formatter";
+import { ProcessManager } from "../process/manager";
 
 export class LogBox {
   private box: blessed.Widgets.BoxElement;
   private screen: blessed.Widgets.Screen;
-  private colorMap: Record<string, string> = {};
+  private processManager: ProcessManager | null = null;
 
   constructor(screen: blessed.Widgets.Screen) {
     this.screen = screen;
@@ -28,9 +29,9 @@ export class LogBox {
     this.screen.append(this.box);
   }
 
-  // Initialize color mapping for processes
-  initColorMap(processNames: string[]): void {
-    this.colorMap = createProcessColorMap(processNames);
+  // Set process manager reference to get colors
+  setProcessManager(processManager: ProcessManager): void {
+    this.processManager = processManager;
   }
 
   // Update the log display
@@ -39,11 +40,18 @@ export class LogBox {
     filter?: string,
     muteFilter?: (entry: LogEntry) => boolean,
   ): void {
+    if (!this.processManager) {
+      throw new Error("ProcessManager not set in LogBox");
+    }
+
     // Apply mute filter if provided
     const filteredEntries = muteFilter ? entries.filter(muteFilter) : entries;
 
+    // Create a getColor function that uses the process manager
+    const getColor = (processName: string) => this.processManager!.getColor(processName);
+
     // Format the log entries
-    const content = formatLogEntries(filteredEntries, this.colorMap, filter);
+    const content = formatLogEntries(filteredEntries, getColor, filter);
 
     // Update the box content
     this.box.setContent(content);

@@ -18,6 +18,15 @@ export const ProcessConfigSchema = z.object({
   color: z.string().optional(),
 });
 
+export const CompleteProcessConfigSchema = z.object({
+  name: z.string(),
+  cmd: z.string(),
+  args: z.array(z.string()).optional(),
+  dependsOn: z.array(z.string()).optional(),
+  ready: ReadyCheckSchema.optional(),
+  color: z.string(),
+});
+
 export const DockerComposeSchema = z.object({
   file: z.string(), // relative or absolute path to docker-compose.yml
   profile: z.string().optional(),
