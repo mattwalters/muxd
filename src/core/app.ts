@@ -1,11 +1,9 @@
 import { loadConfig } from "../config/loader";
 import blessed from "blessed";
 import { setupScreen } from "../ui/screen";
-import { Config } from "../config/schema";
 import { ProcessManager } from "../process/manager";
 import { LogStore } from "../log/store";
-import { initializeIPC, IPCController } from "../ipc";
-import { registerCleanupHandlers } from "./cleanup";
+import { initializeIPC, IPCController, cleanupIPC } from "../ipc";
 import { UIComponents } from "../types";
 
 export class App {
@@ -13,29 +11,25 @@ export class App {
   private ui: UIComponents;
   private logStore;
   private processManager;
-  private ipcController: IPCController | null = null;
+  private ipcController?: IPCController;
 
   constructor() {
+    this.cleanup = this.cleanup.bind(this);
     this.config = loadConfig();
     this.logStore = new LogStore();
     this.processManager = new ProcessManager(this.config, this.logStore);
     this.ui = setupScreen(this.processManager, this.logStore);
 
-    this.setupKeyBindings(this.ui, this.processManager, this.config);
-
+    this.setupKeyBindings();
     this.setupProcessSubscriptions();
     this.setupLogSubscriptions();
-
-    // Register cleanup handlers (we'll update this after IPC is initialized)
-    this.registerBasicCleanupHandlers();
+    this.registerCleanupHandlers();
   }
 
   async start() {
     // Initialize IPC (master or client mode)
     this.ipcController = await initializeIPC(this.logStore);
-
-    // Update cleanup handlers with IPC controller
-    this.registerFullCleanupHandlers();
+    this.registerCleanupHandlers();
 
     if (this.ipcController.isMaster) {
       // Start all services in master mode
@@ -46,18 +40,9 @@ export class App {
     }
   }
 
-  private registerBasicCleanupHandlers() {
-    registerCleanupHandlers(this.ui.screen, this.processManager);
-  }
-
-  private registerFullCleanupHandlers() {
-    if (this.ipcController) {
-      registerCleanupHandlers(
-        this.ui.screen,
-        this.processManager,
-        this.ipcController,
-      );
-    }
+  private registerCleanupHandlers() {
+    process.on("SIGINT", this.cleanup);
+    process.on("SIGTERM", this.cleanup);
   }
 
   private setupProcessSubscriptions() {
@@ -102,17 +87,11 @@ export class App {
     // Initial log update
     updateLogs();
   }
-  private setupKeyBindings(
-    ui: UIComponents,
-    processManager: ProcessManager,
-    config: Config,
-  ) {
-    const { screen, logBox, filterPrompt, serviceModal } = ui;
+  private setupKeyBindings() {
+    const { screen, logBox, filterPrompt, serviceModal } = this.ui;
 
     // Exit key binding (q, Escape, Ctrl+C)
-    screen.key(["escape", "q", "C-c"], () => {
-      this.cleanup(screen, processManager);
-    });
+    screen.key(["escape", "q", "C-c"], this.cleanup);
 
     // Filter key binding (/)
     screen.key("/", () => {
@@ -121,13 +100,13 @@ export class App {
 
     // Service control key binding (f)
     screen.key("f", () => {
-      serviceModal.open(config.services);
+      serviceModal.open(this.config.services);
     });
 
     // Restart process key binding (r)
     screen.key("r", () => {
       // Create a list of process names
-      const choices = config.services.map((p) => p.name);
+      const choices = this.config.services.map((p) => p.name);
 
       // Create and show a list for process selection
       const list = blessed.list({
@@ -151,7 +130,7 @@ export class App {
       list.once("select", (_item, index) => {
         list.destroy();
         const processName = choices[index];
-        processManager.restartProcess(processName);
+        this.processManager.restartProcess(processName);
       });
 
       screen.render();
@@ -182,12 +161,13 @@ export class App {
       logBox.scrollToBottom();
     });
   }
-  private cleanup(
-    screen: blessed.Widgets.Screen,
-    processManager: ProcessManager,
-  ) {
-    processManager.cleanup();
-    screen.destroy();
+  private cleanup() {
+    console.log("cleaning up");
+    this.processManager.cleanup();
+    if (this.ipcController) {
+      cleanupIPC(this.ipcController);
+    }
+    this.ui.screen.destroy();
     process.exit(0);
   }
 }
