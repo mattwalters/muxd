@@ -51,7 +51,6 @@ export class StatusBox {
       const statusColor = isRunning ? "{green-fg}" : "{red-fg}";
 
       const serviceColor = `{${this.serviceToColor[serviceName]}-fg}`;
-      console.log("serviceColor", serviceColor);
       content += `${serviceColor}${serviceName}{/}: ${statusColor}${statusText}{/}\n`;
     }
 

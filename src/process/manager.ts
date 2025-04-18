@@ -3,11 +3,20 @@ import { Config, ProcessConfig, ReadyCheck } from "../config/schema";
 import { LogStore } from "../log/store";
 import EventEmitter from "events";
 
-const ansiColors = ["yellow", "blue", "magenta", "cyan"];
+export const colors = [
+  "#FF0000",
+  "#FFFF00",
+  "#00FF00",
+  "#0000FF",
+  "#FF00FF",
+  "#00FFFF",
+];
+
+type CompleteProcessConfig = ProcessConfig & { color: string };
 
 export class ProcessManager extends EventEmitter {
   private config: Config;
-  private services: (ProcessConfig & { color: string })[];
+  private services: CompleteProcessConfig[];
   private logStore: LogStore;
   private runningProcesses: Record<string, ChildProcess> = {};
   private processStatus: Record<string, boolean> = {};
@@ -20,14 +29,14 @@ export class ProcessManager extends EventEmitter {
     this.config = config;
     this.logStore = logStore;
     this.services = config.services.map((s, index) => {
-      const color = s.color ?? ansiColors[index % ansiColors.length];
+      const color = s.color ?? colors[index % colors.length];
       this.serviceColors[s.name] = color;
       this.serviceFlags[s.name] = { mute: false, solo: false };
       return { ...s, color };
     });
   }
 
-  forEachService(callback: (p: ProcessConfig & { color: string }) => void) {
+  forEachService(callback: (p: CompleteProcessConfig) => void) {
     this.services.forEach((proc) => {
       callback(proc);
     });

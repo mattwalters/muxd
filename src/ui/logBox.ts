@@ -1,14 +1,17 @@
 import blessed from "blessed";
+import chalk from "chalk";
 import { LogEntry } from "../log/store";
-import { formatLogEntries } from "../log/formatter";
 import { ProcessManager } from "../process/manager";
+
+export type ColorAccessor = (processName: string) => string;
 
 export class LogBox {
   private box: blessed.Widgets.BoxElement;
   private screen: blessed.Widgets.Screen;
-  private processManager: ProcessManager | null = null;
+  private processManager: ProcessManager;
 
-  constructor(screen: blessed.Widgets.Screen) {
+  constructor(screen: blessed.Widgets.Screen, processManager: ProcessManager) {
+    this.processManager = processManager;
     this.screen = screen;
     this.box = blessed.box({
       top: 0,
@@ -29,29 +32,16 @@ export class LogBox {
     this.screen.append(this.box);
   }
 
-  // Set process manager reference to get colors
-  setProcessManager(processManager: ProcessManager): void {
-    this.processManager = processManager;
-  }
-
-  // Update the log display
   updateLogs(
     entries: LogEntry[],
     filter?: string,
     muteFilter?: (entry: LogEntry) => boolean,
   ): void {
-    if (!this.processManager) {
-      throw new Error("ProcessManager not set in LogBox");
-    }
-
     // Apply mute filter if provided
     const filteredEntries = muteFilter ? entries.filter(muteFilter) : entries;
 
-    // Create a getColor function that uses the process manager
-    const getColor = (processName: string) => this.processManager!.getColor(processName);
-
     // Format the log entries
-    const content = formatLogEntries(filteredEntries, getColor, filter);
+    const content = this.formatLogEntries(filteredEntries, filter);
 
     // Update the box content
     this.box.setContent(content);
@@ -93,5 +83,29 @@ export class LogBox {
   scrollToBottom(): void {
     this.box.setScrollPerc(100);
     this.screen.render();
+  }
+
+  // Format multiple log entries
+  private formatLogEntries(entries: LogEntry[], filter?: string): string {
+    return entries
+      .map((entry) => this.formatLogEntry(entry, filter))
+      .join("\n");
+  }
+
+  private formatLogEntry(entry: LogEntry, filter?: string): string {
+    const color = this.processManager.getColor(entry.process);
+    let line = color
+      ? chalk.hex(color)(`[${entry.process}] `) + entry.text
+      : `[${entry.process}] ` + entry.text;
+
+    if (filter && filter.trim() !== "") {
+      try {
+        const re = new RegExp(filter, "gi");
+        line = line.replace(re, (match) => chalk.bgYellow(match));
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    return line;
   }
 }
