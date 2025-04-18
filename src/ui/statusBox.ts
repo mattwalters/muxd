@@ -1,10 +1,12 @@
 import blessed from "blessed";
 import { ProcessConfig } from "../config/schema";
+import { ProcessState } from "../types";
+import { CompleteProcessConfig } from "../process/manager";
 
 export class StatusBox {
   private box: blessed.Widgets.BoxElement;
   private screen: blessed.Widgets.Screen;
-  private serviceToState: Record<string, boolean> = {};
+  private serviceToState: Record<string, ProcessState> = {};
   private serviceToColor: Record<string, string> = {};
   constructor(screen: blessed.Widgets.Screen) {
     this.screen = screen;
@@ -28,26 +30,32 @@ export class StatusBox {
     this.screen.append(this.box);
   }
 
-  updateStatus(serviceName: string, status: boolean) {
-    this.serviceToState[serviceName] = status;
+  updateStatus(serviceName: string, state: ProcessState) {
+    this.serviceToState[serviceName] = state;
     this.renderServiceStatuses();
   }
 
-  initializeService(proc: ProcessConfig) {
-    this.serviceToState[proc.name] = false;
-    this.serviceToColor[proc.name] = proc.color!;
+  initializeService(proc: CompleteProcessConfig) {
+    this.serviceToState[proc.name] = proc.state;
+    this.serviceToColor[proc.name] = proc.color;
     this.renderServiceStatuses();
   }
 
   private renderServiceStatuses() {
     let content = "";
     for (const serviceName of Object.keys(this.serviceToState)) {
-      const isRunning = this.serviceToState[serviceName];
-      const statusText = isRunning ? "HEALTHY" : "STOPPED";
-      const statusColor = isRunning ? "{green-fg}" : "{red-fg}";
+      const state = this.serviceToState[serviceName];
+      let coloredState;
+      if (state === ProcessState.HEALTHY) {
+        coloredState = `{green-fg}${state}{/}`;
+      } else if (state === ProcessState.FAILED) {
+        coloredState = `{red-fg}${state}{/}`;
+      } else {
+        coloredState = `{yellow-fg}${state}{/}`;
+      }
 
       const serviceColor = `{${this.serviceToColor[serviceName]}-fg}`;
-      content += `${serviceColor}[${serviceName}]{/} ${statusColor}${statusText}{/}\n`;
+      content += `${serviceColor}[${serviceName}]{/} ${coloredState}\n`;
     }
 
     this.box.setContent(content);

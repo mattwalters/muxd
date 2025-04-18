@@ -6,6 +6,7 @@ import { ProcessManager } from "../process/manager";
 import { LogStore } from "../log/store";
 import { FilterPrompt } from "./filterPrompt";
 import { ServiceControlModal } from "./serviceModal";
+import { RestartPrompt } from "./restartPrompt";
 
 // Setup the main blessed screen
 export function setupScreen(
@@ -22,6 +23,7 @@ export function setupScreen(
   const statusBar = new StatusBar(screen);
   const filterPrompt = new FilterPrompt(screen, logStore);
   const serviceModal = new ServiceControlModal(screen, processManager);
+  const restartPrompt = new RestartPrompt(screen, processManager);
 
   // Return the screen and components
   screen.render();
@@ -32,5 +34,6 @@ export function setupScreen(
     statusBar,
     filterPrompt,
     serviceModal,
+    restartPrompt,
   };
 }

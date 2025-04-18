@@ -15,7 +15,10 @@ export const colors = [
   "#00FFFF",
 ];
 
-type CompleteProcessConfig = ProcessConfig & { color: string };
+export type CompleteProcessConfig = ProcessConfig & {
+  color: string;
+  state: ProcessState;
+};
 
 export class ProcessManager extends EventEmitter {
   private config: Config;
@@ -36,7 +39,7 @@ export class ProcessManager extends EventEmitter {
       this.serviceColors[s.name] = color;
       this.serviceFlags[s.name] = { mute: false, solo: false };
       this.processStatus[s.name] = ProcessState.PENDING;
-      return { ...s, color };
+      return { ...s, color, state: ProcessState.PENDING };
     });
   }
 

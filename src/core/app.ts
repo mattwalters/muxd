@@ -88,7 +88,8 @@ export class App {
     updateLogs();
   }
   private setupKeyBindings() {
-    const { screen, logBox, filterPrompt, serviceModal } = this.ui;
+    const { screen, logBox, filterPrompt, serviceModal, restartPrompt } =
+      this.ui;
 
     // Exit key binding (q, Escape, Ctrl+C)
     screen.key(["escape", "q", "C-c"], this.cleanup);
@@ -105,35 +106,7 @@ export class App {
 
     // Restart process key binding (r)
     screen.key("r", () => {
-      // Create a list of process names
-      const choices = this.config.services.map((p) => p.name);
-
-      // Create and show a list for process selection
-      const list = blessed.list({
-        parent: screen,
-        border: "line",
-        label: " Restart Process (Select One) ",
-        width: "50%",
-        height: choices.length + 2,
-        top: "center",
-        left: "center",
-        items: choices,
-        keys: true,
-        vi: true,
-        mouse: true,
-        style: { selected: { bg: "blue" } },
-      });
-
-      list.focus();
-
-      // Handle process selection
-      list.once("select", (_item, index) => {
-        list.destroy();
-        const processName = choices[index];
-        this.processManager.restartProcess(processName);
-      });
-
-      screen.render();
+      restartPrompt.open(this.config.services);
     });
 
     // Scrolling key bindings
