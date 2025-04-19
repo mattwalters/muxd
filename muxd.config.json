@@ -33,6 +33,20 @@
       }
     },
     {
+      "name": "app",
+      "cmd": "node",
+      "args": [
+        "-e",
+        "const http = require('http'); const server = http.createServer((req, res) => { if (req.url === '/health') { res.writeHead(200, {'Content-Type': 'text/plain'}); res.end('ok'); } else { res.end('api'); } }); server.listen(3400, () => { console.log('API server listening on 3400'); }); setInterval(() => { console.log('API heartbeat'); }, 3000);"
+      ],
+      "ready": {
+        "type": "command",
+        "command": "curl -fsS http://localhost:3400/health",
+        "interval": 500,
+        "timeout": 10000
+      }
+    },
+    {
       "name": "web",
       "cmd": "node",
       "args": [
