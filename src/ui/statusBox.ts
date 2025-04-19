@@ -42,8 +42,14 @@ export class StatusBox {
   }
 
   private renderServiceStatuses() {
+    const serviceNames = Object.keys(this.serviceToState);
+    // Determine width for service column (including brackets)
+    const maxNameLen = serviceNames.length
+      ? Math.max(...serviceNames.map(n => n.length + 2))
+      : 0;
+
     let content = "";
-    for (const serviceName of Object.keys(this.serviceToState)) {
+    for (const serviceName of serviceNames) {
       const state = this.serviceToState[serviceName];
       let coloredState;
       if (state === ProcessState.HEALTHY) {
@@ -54,8 +60,10 @@ export class StatusBox {
         coloredState = `{yellow-fg}${state}{/}`;
       }
 
+      // Pad service name cell to align states
+      const serviceCell = `[${serviceName}]`.padEnd(maxNameLen);
       const serviceColor = `{${this.serviceToColor[serviceName]}-fg}`;
-      content += `${serviceColor}[${serviceName}]{/} ${coloredState}\n`;
+      content += `${serviceColor}${serviceCell}{/} ${coloredState}\n`;
     }
 
     this.box.setContent(content);

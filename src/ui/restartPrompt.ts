@@ -1,8 +1,6 @@
 import blessed from "blessed";
-import util from "util";
 import { ProcessManager } from "../process/manager";
 import { ProcessConfig } from "../config/schema";
-import { logger } from "./logger";
 
 export class RestartPrompt {
   private screen: blessed.Widgets.Screen;
@@ -31,7 +29,7 @@ export class RestartPrompt {
     this.container = blessed.box({
       parent: this.screen,
       border: "line",
-      label: " Restart Process (type to filter, j/k to navigate) ",
+      label: " Restart Process (type to filter, Shift + j/k to navigate) ",
       width: "50%",
       height: names.length + 4,
       top: "center",
@@ -72,18 +70,11 @@ export class RestartPrompt {
       // Navigate list when Shift+K/J is pressed; prevent further handling
       if (key.shift) {
         if (key.name === "k") {
-          const before = this.list.selected;
-          this.list.move(-1);
           this.screen.render();
-          const after = this.list.selected;
-          logger.info("before after k", before, after);
           return;
         }
         if (key.name === "j") {
-          const before = this.list.selected;
           this.list.move(1);
-          const after = this.list.selected;
-          logger.info("before after j", before, after);
           this.screen.render();
           return;
         }
@@ -96,8 +87,8 @@ export class RestartPrompt {
 
         case "enter":
           if (this.filteredServices.length > 0) {
-            const idx = this.list.selected;
-            const processName = this.filteredServices[idx].name;
+            const index = (this.list as any).selected;
+            const processName = this.filteredServices[index].name;
             this.processManager.restartProcess(processName);
             this.close();
           }
@@ -118,6 +109,10 @@ export class RestartPrompt {
 
     this.updateList();
     this.screen.render();
+  }
+
+  isOpen(): boolean {
+    return !!this.container;
   }
 
   close(): void {

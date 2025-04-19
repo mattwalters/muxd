@@ -43,7 +43,7 @@ export interface UIComponents {
   logBox: any;
   statusBar: any;
   statusBox: any;
-  filterPrompt?: any;
-  serviceModal?: any;
-  restartPrompt?: any;
+  filterPrompt: any;
+  serviceModal: any;
+  restartPrompt: any;
 }

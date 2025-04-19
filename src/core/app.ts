@@ -92,7 +92,9 @@ export class App {
       this.ui;
 
     // Exit key binding (q, Escape, Ctrl+C)
-    screen.key(["escape", "q", "C-c"], this.cleanup);
+    screen.key(["escape", "q", "C-c"], () => {
+      this.cleanup();
+    });
 
     // Filter key binding (/)
     screen.key("/", () => {
