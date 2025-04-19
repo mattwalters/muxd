@@ -62,7 +62,9 @@ export class RestartPrompt {
       vi: false,
     });
 
-    this.container.focus();
+    this.screen.saveFocus();
+    this.screen.focusPush(this.container);
+
     this.container.on("keypress", (ch: string, key: any) => {
       if (!this.container || !this.list || !this.filterText) {
         return;
@@ -81,6 +83,8 @@ export class RestartPrompt {
       }
       switch (key.name) {
         case "escape":
+          this.close();
+          return;
         case "q":
           this.close();
           return;
@@ -121,6 +125,8 @@ export class RestartPrompt {
       this.container = null;
       this.filterText = null;
       this.list = null;
+      this.screen.focusPop();
+      this.screen.restoreFocus();
       this.screen.render();
     }
   }

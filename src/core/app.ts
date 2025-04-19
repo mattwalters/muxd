@@ -5,6 +5,7 @@ import { ProcessManager } from "../process/manager";
 import { LogStore } from "../log/store";
 import { initializeIPC, IPCController, cleanupIPC } from "../ipc";
 import { UIComponents } from "../types";
+import { logger } from "../ui/logger";
 
 export class App {
   private config;
@@ -92,7 +93,18 @@ export class App {
       this.ui;
 
     // Exit key binding (q, Escape, Ctrl+C)
-    screen.key(["escape", "q", "C-c"], () => {
+    screen.key(["escape", "q"], () => {
+      if (
+        filterPrompt.isOpen() ||
+        serviceModal.isOpen() ||
+        restartPrompt.isOpen()
+      ) {
+        return;
+      }
+      this.cleanup();
+    });
+    // Exit key binding (q, Escape, Ctrl+C)
+    screen.key(["C-c"], () => {
       this.cleanup();
     });
 

@@ -4,14 +4,20 @@ import { LogStore } from "../log/store";
 export class FilterPrompt {
   private screen: blessed.Widgets.Screen;
   private logStore: LogStore;
+  private amIOpen: boolean = false;
 
   constructor(screen: blessed.Widgets.Screen, logStore: LogStore) {
     this.screen = screen;
     this.logStore = logStore;
   }
 
+  isOpen() {
+    return this.amIOpen;
+  }
+
   // Open the filter prompt with the current filter value
   open(): void {
+    this.amIOpen = true;
     const currentFilter = this.logStore.getFilter();
 
     const prompt = blessed.prompt({
@@ -31,6 +37,7 @@ export class FilterPrompt {
       if (value !== undefined) {
         this.logStore.setFilter(value.trim());
       }
+      this.amIOpen = false;
       prompt.destroy();
       this.screen.render();
     });

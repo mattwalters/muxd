@@ -57,6 +57,10 @@ export class ServiceControlModal {
     }
   }
 
+  isOpen(): boolean {
+    return !!this.modal;
+  }
+
   // Bind key handlers to the modal
   private bindKeys(services: ProcessConfig[]): void {
     if (!this.modal) return;
