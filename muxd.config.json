@@ -4,20 +4,6 @@
   },
   "services": [
     {
-      "name": "db",
-      "cmd": "node",
-      "args": [
-        "-e",
-        "const http = require('http'); const server = http.createServer((req, res) => { if (req.url === '/health') { res.writeHead(200, {'Content-Type': 'text/plain'}); res.end('ok'); } else { res.end('db'); } }); server.listen(5500, () => { console.log('DB server listening on 5500'); }); setInterval(() => { console.log('DB heartbeat'); }, 3000);"
-      ],
-      "ready": {
-        "type": "url",
-        "url": "http://localhost:5500/health",
-        "interval": 500,
-        "timeout": 10000
-      }
-    },
-    {
       "name": "api",
       "cmd": "node",
       "args": [
@@ -44,7 +30,8 @@
         "command": "curl -fsS http://localhost:3400/health",
         "interval": 500,
         "timeout": 10000
-      }
+      },
+      "dependsOn": ["web"]
     },
     {
       "name": "web",
@@ -52,8 +39,7 @@
       "args": [
         "-e",
         "const http = require('http'); const server = http.createServer((req, res) => { res.end('web'); }); server.listen(3300, () => { console.log('Web server listening on 3300'); }); setInterval(() => { console.log('Web heartbeat'); }, 3000);"
-      ],
-      "dependsOn": ["api"]
+      ]
     }
   ]
 }
