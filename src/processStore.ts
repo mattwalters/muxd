@@ -1,10 +1,18 @@
 import { ChildProcess, spawn, exec } from "child_process";
-import { Config, ProcessConfig, ReadyCheck } from "../config/schema";
-import { LogStore } from "../logStore";
+import { Config, ProcessConfig, ReadyCheck } from "./config/schema.js";
+import { LogStore } from "./logStore.js";
 import EventEmitter from "events";
-import { ProcessState } from "../types";
-import * as http from "http";
-import * as https from "https";
+import { logger } from "./debug.js";
+
+export enum ProcessState {
+  PENDING = "PENDING", // Process is initialized but not started yet
+  STARTING = "STARTING", // Process has been started but not ready
+  HEALTHY = "HEALTHY", // Process is running and ready
+  STOPPING = "STOPPING", // Process is being gracefully stopped
+  STOPPED = "STOPPED", // Process is not running
+  FAILED = "FAILED", // Process exited with error or health check failed
+  RESTARTING = "RESTARTING", // Process is being restarted
+}
 
 export const colors = [
   "#FF0000",
@@ -20,68 +28,49 @@ export type CompleteProcessConfig = ProcessConfig & {
   state: ProcessState;
 };
 
-export class ProcessManager extends EventEmitter {
-  private config: Config;
-  private services: CompleteProcessConfig[];
+export const getStateColor = (state: string) => {
+  if (state === ProcessState.HEALTHY) {
+    return "green";
+  } else if (state === ProcessState.FAILED) {
+    return "red";
+  } else {
+    return "yellow";
+  }
+};
+
+export class ProcessStore extends EventEmitter {
+  private services: Record<string, CompleteProcessConfig>;
   private logStore: LogStore;
   private runningProcesses: Record<string, ChildProcess> = {};
-  private processStatus: Record<string, ProcessState> = {};
-  private serviceFlags: Record<string, { mute: boolean; solo: boolean }> = {};
-  private serviceColors: Record<string, string> = {};
-  STATUS_CHANGE_EVENT_NAME = "status-change";
+  PROCESS_UPDATED_EVENT_NAME = "process-updated";
 
   constructor(config: Config, logStore: LogStore) {
     super();
-    this.config = config;
     this.logStore = logStore;
-    this.services = config.services.map((s, index) => {
-      const color = s.color ?? colors[index % colors.length];
-      this.serviceColors[s.name] = color;
-      this.serviceFlags[s.name] = { mute: false, solo: false };
-      this.processStatus[s.name] = ProcessState.PENDING;
-      return { ...s, color, state: ProcessState.PENDING };
+    this.services = {};
+    config.services.forEach((s, index) => {
+      const color = s.color ?? colors[index % colors.length] ?? "white";
+      this.services[s.name] = { ...s, color, state: ProcessState.PENDING };
     });
   }
 
-  forEachService(callback: (p: CompleteProcessConfig) => void) {
-    this.services.forEach(callback);
+  getProcesses(): CompleteProcessConfig[] {
+    return Object.values(this.services);
   }
 
   getColor(serviceName: string) {
-    return this.serviceColors[serviceName];
-  }
-
-  getServiceFlags(serviceName: string) {
-    return this.serviceFlags[serviceName] || { mute: false, solo: false };
-  }
-
-  toggleMute(serviceName: string): boolean {
-    if (!this.serviceFlags[serviceName]) return false;
-    this.serviceFlags[serviceName].mute = !this.serviceFlags[serviceName].mute;
-    this.logStore.addSystemLog(
-      `${serviceName} is now ${this.serviceFlags[serviceName].mute ? "muted" : "unmuted"}.`,
-    );
-    return true;
-  }
-
-  toggleSolo(serviceName: string): boolean {
-    if (!this.serviceFlags[serviceName]) return false;
-    this.serviceFlags[serviceName].solo = !this.serviceFlags[serviceName].solo;
-    this.logStore.addSystemLog(
-      `${serviceName} is now ${this.serviceFlags[serviceName].solo ? "solo" : "unsolo"}.`,
-    );
-    return true;
+    return this.services[serviceName]?.color ?? "white";
   }
 
   async startAllProcesses() {
-    for (const procConfig of this.services) {
-      this.logStore.addLog(procConfig.name, "Starting process...");
+    for (const serviceName of Object.keys(this.services)) {
+      const procConfig = this.services[serviceName]!;
       try {
-        await this.startProcess(procConfig);
+        this.logStore.addSystemLog(`Starting ${procConfig.name}...`);
+        this.startProcess(procConfig);
       } catch (err: any) {
-        this.logStore.addLog(
-          procConfig.name,
-          `Failed to start: ${err.message}`,
+        this.logStore.addSystemLog(
+          `Failed to start ${procConfig.name}: ${err.message}`,
         );
       }
     }
@@ -93,16 +82,16 @@ export class ProcessManager extends EventEmitter {
         procConfig.name,
         `Waiting for dependencies: ${procConfig.dependsOn.join(", ")}`,
       );
-      await this.waitForDependencies(procConfig.dependsOn);
+      await this.waitForDependencies(procConfig.name, procConfig.dependsOn);
       this.logStore.addLog(procConfig.name, "Dependencies are ready.");
     }
 
-    // Mark as STARTING
     this.updateProcessStatus(procConfig.name, ProcessState.STARTING);
 
     const proc = this.spawnProcess(procConfig, (data, isError) => {
       const lines = data.toString().split("\n");
       lines.forEach((line) => {
+        logger("line", line, line.trim(), line.trimEnd());
         if (line.trim()) {
           this.logStore.addLog(
             procConfig.name,
@@ -111,10 +100,10 @@ export class ProcessManager extends EventEmitter {
         }
       });
     });
-
     this.runningProcesses[procConfig.name] = proc;
 
     proc.on("close", (code: number | null, signal: string | null) => {
+      logger("the process closed", procConfig.name);
       // Log exit with code and signal
       let msg = `exited with code ${code}`;
       if (signal) msg += ` and signal ${signal}`;
@@ -132,15 +121,18 @@ export class ProcessManager extends EventEmitter {
     if (procConfig.ready) {
       this.logStore.addLog(procConfig.name, "Performing ready check...");
       try {
+        logger("waitForReadyCheck", procConfig.ready);
         await this.waitForReadyCheck(procConfig.ready as ReadyCheck);
+        logger("we are ready", procConfig.name);
         this.logStore.addLog(procConfig.name, "Ready check passed.");
+        logger("we are ready 2222", procConfig.name);
         this.updateProcessStatus(procConfig.name, ProcessState.HEALTHY);
       } catch (err: any) {
         this.logStore.addLog(
           procConfig.name,
           `Ready check failed: ${err.message}`,
         );
-        // Do not mark failed on ready check; only non-zero exit codes should be failed
+        logger("we are updating a process to stopped", procConfig.name);
         this.updateProcessStatus(procConfig.name, ProcessState.STOPPED);
       }
     } else {
@@ -155,7 +147,7 @@ export class ProcessManager extends EventEmitter {
   }
 
   async restartProcess(processName: string): Promise<void> {
-    const procConfig = this.services.find((p) => p.name === processName);
+    const procConfig = this.services[processName];
     if (!procConfig) {
       this.logStore.addSystemLog(`Configuration for ${processName} not found.`);
       return;
@@ -197,57 +189,46 @@ export class ProcessManager extends EventEmitter {
     });
   }
 
-  private waitForDependencies(deps: string[]): Promise<void> {
+  private waitForDependencies(procName: string, deps: string[]): Promise<void> {
     return new Promise((resolve) => {
       const interval = setInterval(() => {
-        if (
-          deps.every((dep) => this.processStatus[dep] === ProcessState.HEALTHY)
-        ) {
+        const unreadyDeps = deps.filter(
+          (dep) => this.services[dep]?.state !== ProcessState.HEALTHY,
+        );
+        if (unreadyDeps.length === 0) {
           clearInterval(interval);
           resolve();
+        } else {
+          this.logStore.addLog(
+            procName,
+            `Waiting for dependencies: ${unreadyDeps.join(", ")}`,
+          );
         }
-      }, 500);
+      }, 1000);
     });
   }
 
   private waitForReadyCheck(check: ReadyCheck): Promise<void> {
     return new Promise((resolve, reject) => {
       const intervalMs = check.interval || 1000;
-      const timeoutMs = check.timeout || 30000;
+      const timeoutMs = check.timeout || 5000;
+      logger("timeout", timeoutMs);
       const startTime = Date.now();
       const interval = setInterval(() => {
         if (Date.now() - startTime > timeoutMs) {
+          logger("ITS OVER");
           clearInterval(interval);
           reject(new Error("Ready check timed out"));
           return;
         }
-        if (check.type === "command" && check.command) {
-          exec(check.command, (error: Error | null) => {
-            if (!error) {
-              clearInterval(interval);
-              resolve();
-            }
-          });
-        } else if (check.type === "url" && check.url) {
-          const lib = check.url.startsWith("https") ? https : http;
-          lib
-            .get(check.url, (res: any) => {
-              if (
-                res.statusCode &&
-                res.statusCode >= 200 &&
-                res.statusCode < 300
-              ) {
-                clearInterval(interval);
-                resolve();
-              }
-            })
-            .on("error", () => {
-              /* ignore */
-            });
-        } else {
-          clearInterval(interval);
-          reject(new Error("Invalid ready check configuration"));
-        }
+        exec(check.command, (error: Error | null) => {
+          logger("ready check error", error);
+          if (!error) {
+            logger("we foooooood");
+            clearInterval(interval);
+            resolve();
+          }
+        });
       }, intervalMs);
     });
   }
@@ -264,6 +245,8 @@ export class ProcessManager extends EventEmitter {
     proc.stdout.on("data", (data: Buffer) => onData(data, false));
     proc.stderr.on("data", (data: Buffer) => onData(data, true));
 
+    this.emit(this.PROCESS_UPDATED_EVENT_NAME, procConfig.name, procConfig);
+
     return proc;
   }
 
@@ -271,10 +254,12 @@ export class ProcessManager extends EventEmitter {
     processName: string,
     newState: ProcessState,
   ): void {
-    const oldState = this.processStatus[processName];
-    this.processStatus[processName] = newState;
+    logger("We are updating a process", newState);
+    const service = this.services[processName]!;
+    const oldState = service.state;
+    service.state = newState;
     if (oldState !== newState) {
-      this.emit(this.STATUS_CHANGE_EVENT_NAME, processName, newState);
+      this.emit(this.PROCESS_UPDATED_EVENT_NAME, processName, newState);
     }
   }
 }
