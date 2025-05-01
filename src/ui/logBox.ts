@@ -1,23 +1,23 @@
 import blessed from "blessed";
 import chalk from "chalk";
 import { LogEntry } from "../log/store";
-import { ProcessManager } from "../process/manager";
+import { ProcessStore } from "../processStore";
+import contrib from "blessed-contrib";
 
 export type ColorAccessor = (processName: string) => string;
 
 export class LogBox {
   private box: blessed.Widgets.BoxElement;
-  private screen: blessed.Widgets.Screen;
-  private processManager: ProcessManager;
 
-  constructor(screen: blessed.Widgets.Screen, processManager: ProcessManager) {
-    this.processManager = processManager;
-    this.screen = screen;
-    this.box = blessed.box({
-      top: 0,
-      left: 0,
-      width: "75%",
-      height: "100%-1",
+  constructor(
+    grid: contrib.grid,
+    private screen: blessed.Widgets.Screen,
+    private processStore: ProcessStore,
+  ) {
+    this.box = grid.set(0, 0, 12, 8, blessed.box, {
+      label: "Logs",
+      width: "100%",
+      height: "100%",
       border: { type: "line" },
       scrollbar: { ch: " " },
       alwaysScroll: true,
@@ -25,23 +25,13 @@ export class LogBox {
       keys: true,
       mouse: true,
       vi: true,
-      label: " Logs ",
       content: "",
     });
-
-    this.screen.append(this.box);
   }
 
-  updateLogs(
-    entries: LogEntry[],
-    filter?: string,
-    muteFilter?: (entry: LogEntry) => boolean,
-  ): void {
-    // Apply mute filter if provided
-    const filteredEntries = muteFilter ? entries.filter(muteFilter) : entries;
-
+  updateLogs(entries: LogEntry[], filter?: string): void {
     // Format the log entries
-    const content = this.formatLogEntries(filteredEntries, filter);
+    const content = this.formatLogEntries(entries, filter);
 
     // Update the box content
     this.box.setContent(content);
@@ -61,30 +51,6 @@ export class LogBox {
     this.screen.render();
   }
 
-  // Page up
-  pageUp(): void {
-    this.box.scroll(-(this.box.height as number) / 2);
-    this.screen.render();
-  }
-
-  // Page down
-  pageDown(): void {
-    this.box.scroll((this.box.height as number) / 2);
-    this.screen.render();
-  }
-
-  // Scroll to top
-  scrollToTop(): void {
-    this.box.setScrollPerc(0);
-    this.screen.render();
-  }
-
-  // Scroll to bottom
-  scrollToBottom(): void {
-    this.box.setScrollPerc(100);
-    this.screen.render();
-  }
-
   // Format multiple log entries
   private formatLogEntries(entries: LogEntry[], filter?: string): string {
     return entries
@@ -93,7 +59,7 @@ export class LogBox {
   }
 
   private formatLogEntry(entry: LogEntry, filter?: string): string {
-    const color = this.processManager.getColor(entry.process);
+    const color = this.processStore.getColor(entry.process);
     let line = color
       ? chalk.hex(color)(`[${entry.process}] `) + entry.text
       : `[${entry.process}] ` + entry.text;
