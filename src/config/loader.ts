@@ -25,9 +25,6 @@ const colorMapping = [
   "#00FFFF",
 ];
 
-const chooseColor = (index: number) =>
-  colorMapping[index % colorMapping.length];
-
 // Load and validate the configuration file
 export function loadConfig(): Config {
   const configFilePath = getConfigFilePath();

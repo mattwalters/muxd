@@ -10,7 +10,7 @@
         "-e",
         "const http = require('http'); const server = http.createServer((req, res) => { if (req.url === '/health') { res.writeHead(200, {'Content-Type': 'text/plain'}); res.end('ok'); } else { res.end('api'); } }); server.listen(4400, () => { console.log('API server listening on 4400'); }); setInterval(() => { console.log('API heartbeat'); }, 3000);"
       ],
-      "dependsOn": ["db"],
+      "dependsOn": ["postgres"],
       "ready": {
         "type": "command",
         "command": "curl -fsS http://localhost:4400/health",

@@ -3,8 +3,9 @@ import blessed from "blessed";
 import { LogStore } from "../logStore";
 import { LogBox } from "../components/LogBox";
 import { ProcessStore } from "../processStore";
+import { Layout } from "./Layout";
 
-export class DevLayout {
+export class DevLayout extends Layout {
   private grid: contrib.grid;
   private logBox: LogBox;
   private following = true;
@@ -14,6 +15,7 @@ export class DevLayout {
     private processStore: ProcessStore,
     private logStore: LogStore,
   ) {
+    super();
     this.grid = new contrib.grid({ rows: 12, cols: 12, screen: this.screen });
     this.logBox = new LogBox(
       this.screen,
@@ -21,15 +23,17 @@ export class DevLayout {
       this.logStore,
       this.processStore,
     );
+    this.addWorldMap();
+    this.addGauge();
   }
 
-  addWorldMap() {
+  private addWorldMap() {
     return this.grid.set(0, 8, 6, 4, contrib.map, {
       label: "World Map",
     });
   }
 
-  addGauge() {
+  private addGauge() {
     return this.grid.set(6, 8, 6, 4, contrib.gauge, {
       label: "Progress",
       stroke: "green",
