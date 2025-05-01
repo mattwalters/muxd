@@ -10,6 +10,7 @@ export class MainLayout extends Layout {
     this.grid = new contrib.grid({ rows: 12, cols: 12, screen: this.screen });
     this.addWorldMap();
     this.addList();
+    this.screen.render();
   }
 
   private addWorldMap() {
@@ -17,13 +18,15 @@ export class MainLayout extends Layout {
   }
 
   private addList() {
-    const box = this.grid.set(0, 0, 12, 12, blessed.box, {
+    const box = this.grid.set(4, 5, 4, 2, blessed.box, {
+      padding: 1,
+      label: "Select Environment",
       border: "line",
       width: "50%",
       top: "center",
       left: "center",
     });
-    const list = blessed.list({ parent: box });
+    blessed.list({ parent: box, items: ["Dev", "Staging", "Prod"] });
   }
 
   destroy(): void {
