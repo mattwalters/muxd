@@ -30,8 +30,8 @@ export class MainLayout extends Layout {
 
   private addEnvironmentSelector() {
     // create the list itself, not a box + child
-    this.envList = this.grid.set(4, 5, 4, 2, blessed.list, {
-      label: "Select Environment",
+    this.envList = this.grid.set(4, 4, 4, 4, blessed.list, {
+      label: "Select Environment (use j, k, or arrows)",
       border: "line",
       padding: { left: 1, right: 1 },
       keys: true, // allow ↑/↓ navigation
@@ -48,6 +48,15 @@ export class MainLayout extends Layout {
           },
         },
       },
+    });
+
+    this.envList.key(["j"], () => {
+      this.envList.move(1);
+      this.screen.render();
+    });
+    this.envList.key(["k"], () => {
+      this.envList.move(-1);
+      this.screen.render();
     });
 
     // when user hits Enter on an item

@@ -5,6 +5,7 @@ import { LogStore } from "./logStore";
 import { DevLayout } from "./layouts/DevLayout";
 import { Layout } from "./layouts/Layout";
 import { MainLayout } from "./layouts/MainLayout";
+import { logger } from "./debug";
 
 export class App {
   private config;
@@ -69,16 +70,15 @@ export class App {
 
   private setupKeyBindings() {
     this.screen.key(["escape", "q"], () => {
-      if (2 + 2 === 4) {
-        return;
+      if (this.layout instanceof DevLayout) {
+        this.updateLayout(this.createMainLayout());
+      } else {
+        this.cleanup();
       }
-      this.cleanup();
     });
-    // Exit key binding (q, Escape, Ctrl+C)
     this.screen.key(["C-c"], () => {
       this.cleanup();
     });
-    //
   }
 
   async start() {
