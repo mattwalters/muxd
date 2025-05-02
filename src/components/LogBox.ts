@@ -1,8 +1,7 @@
 import blessed from "blessed";
 import chalk from "chalk";
-import { LogStore } from "../logStore";
+import { LogStore, LogEntry } from "../logStore";
 import { ProcessStore } from "../processStore";
-import { LogEntry } from "../log/store";
 
 export class LogBox {
   private box: blessed.Widgets.BoxElement;
@@ -21,9 +20,16 @@ export class LogBox {
       top: offset,
       height: `100%-${offset}`,
       border: "line",
-      alwaysScroll: true,
       scrollable: true,
-      scrollbar: { ch: " " },
+      alwaysScroll: true,
+      keys: true,
+      mouse: true,
+      vi: true,
+      scrollbar: {
+        ch: " ",
+        track: { bg: "grey" },
+        style: { bg: "white" },
+      },
     });
     this.onLogAdded = () => {
       const lines = this.logStore.getLogs();
