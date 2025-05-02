@@ -3,6 +3,7 @@ import { Config, ProcessConfig, ReadyCheck } from "./config/schema.js";
 import { LogStore } from "./logStore.js";
 import EventEmitter from "events";
 import { logger } from "./debug.js";
+import chalk from "chalk";
 
 export enum ProcessState {
   PENDING = "PENDING", // Process is initialized but not started yet
@@ -28,13 +29,13 @@ export type CompleteProcessConfig = ProcessConfig & {
   state: ProcessState;
 };
 
-export const getStateColor = (state: string) => {
+export const getColoredState = (state: string) => {
   if (state === ProcessState.HEALTHY) {
-    return "green";
+    return chalk.black.bgGreen(state);
   } else if (state === ProcessState.FAILED) {
-    return "red";
+    return chalk.black.bgRed(state);
   } else {
-    return "yellow";
+    return chalk.black.bgYellow(state);
   }
 };
 
@@ -49,7 +50,7 @@ export class ProcessStore extends EventEmitter {
     this.logStore = logStore;
     this.services = {};
     config.services.forEach((s, index) => {
-      const color = s.color ?? colors[index % colors.length] ?? "white";
+      const color = s.color ?? colors[index % colors.length] ?? "#FFFFFF";
       this.services[s.name] = { ...s, color, state: ProcessState.PENDING };
     });
   }

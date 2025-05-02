@@ -4,10 +4,13 @@ import { LogStore } from "../logStore";
 import { LogBox } from "../components/LogBox";
 import { ProcessStore } from "../processStore";
 import { Layout } from "./Layout";
+import { ServiceBox } from "../components/ServiceBox";
 
 export class DevLayout extends Layout {
   private grid: contrib.grid;
   private logBox: LogBox;
+  private serviceBox: ServiceBox;
+  private sparkline: any;
   private worldMap: any;
   private gauge: any;
 
@@ -19,20 +22,30 @@ export class DevLayout extends Layout {
   ) {
     super();
     this.grid = new contrib.grid({ rows: 12, cols: 12, screen: this.screen });
+
     this.logBox = new LogBox(
       this.screen,
       this.grid,
       this.logStore,
       this.processStore,
     );
-    this.worldMap = this.grid.set(0, 8, 6, 4, contrib.map, {
-      label: "World Map",
-    });
-    this.gauge = this.grid.set(6, 8, 6, 4, contrib.gauge, {
-      label: "Progress",
-      stroke: "green",
-      fill: "white",
-    });
+
+    this.serviceBox = new ServiceBox(this.screen, this.grid, this.processStore);
+    //this.worldMap = this.grid.set(6, 8, 6, 4, contrib.map, {
+    //  label: "World Map",
+    //});
+    //this.sparkline = this.grid.set(4, 8, 2, 4, contrib.sparkline, {
+    //  label: "World fooo",
+    //  tags: true,
+    //});
+
+    //this.sparkline.setData(
+    //  ["Sparkline1 asdasd asdasd HEALHTH", "HEALTHY"],
+    //  [
+    //    [10, 20, 30, 20],
+    //    [40, 10, 40, 50],
+    //  ],
+    //);
   }
 
   destroy(): void {

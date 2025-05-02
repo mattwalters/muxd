@@ -14,7 +14,7 @@ export class LogBox {
     private logStore: LogStore,
     private processStore: ProcessStore,
   ) {
-    this.box = this.grid.set(0, 0, 12, 8, blessed.box, {
+    this.box = this.grid.set(1, 0, 11, 12, blessed.box, {
       label: "Logs",
       alwaysScroll: true,
       scrollable: true,
