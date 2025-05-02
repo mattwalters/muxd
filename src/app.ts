@@ -5,6 +5,7 @@ import { LogStore } from "./logStore";
 import { DevLayout } from "./layouts/DevLayout";
 import { Layout } from "./layouts/Layout";
 import { MainLayout } from "./layouts/MainLayout";
+import { logger } from "./logger";
 
 export class App {
   private config;
@@ -68,15 +69,20 @@ export class App {
   }
 
   private setupKeyBindings() {
-    this.screen.key(["escape", "q"], () => {
-      if (this.layout instanceof DevLayout) {
-        this.updateLayout(this.createMainLayout());
-      } else {
-        this.cleanup();
-      }
-    });
     this.screen.key(["C-c"], () => {
       this.cleanup();
+    });
+
+    this.screen.on("keypress", (_, event) => {
+      const key = event.name;
+      logger("key", key);
+      if (this.layout && this.layout.handleKeyPress(key)) {
+        return;
+      }
+
+      if (key === "escape" || key === "q") {
+        this.cleanup();
+      }
     });
   }
 

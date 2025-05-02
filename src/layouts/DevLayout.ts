@@ -6,9 +6,11 @@ import { ProcessStore } from "../processStore";
 import { Layout } from "./Layout";
 import { ServiceBox } from "../components/ServiceBox";
 import { logger } from "../logger";
+import { Modal, RestartModal } from "../components/Modal";
 
 export class DevLayout extends Layout {
   private container: blessed.Widgets.BoxElement;
+  private modal: RestartModal;
   private logBox: LogBox;
   private serviceBox: ServiceBox;
 
@@ -37,9 +39,32 @@ export class DevLayout extends Layout {
       this.logStore,
       this.processStore,
     );
+
+    this.modal = new RestartModal(this.screen, this.root, this.processStore);
+  }
+
+  handleKeyPress(key: string) {
+    logger("were key pressing in dev layout");
+    if (key === "r") {
+      logger("open modal");
+      this.modal.show();
+      return true;
+    }
+    if (key === "escape" || key === "q") {
+      this.modal.hide();
+      return true;
+    }
+
+    if (key === "enter" && this.modal.open) {
+      const name = this.modal.selected();
+      this.processStore.restartProcess(name);
+      this.modal.hide();
+      return;
+    }
   }
 
   destroy(): void {
+    this.modal.destroy();
     this.serviceBox.destroy();
     this.logBox.destroy();
     this.root.destroy();
