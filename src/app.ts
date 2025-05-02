@@ -5,7 +5,6 @@ import { LogStore } from "./logStore";
 import { DevLayout } from "./layouts/DevLayout";
 import { Layout } from "./layouts/Layout";
 import { MainLayout } from "./layouts/MainLayout";
-import { logger } from "./debug";
 
 export class App {
   private config;

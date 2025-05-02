@@ -2,7 +2,7 @@ import { ChildProcess, spawn, exec } from "child_process";
 import { Config, ProcessConfig, ReadyCheck } from "./config/schema.js";
 import { LogStore } from "./logStore.js";
 import EventEmitter from "events";
-import { logger } from "./debug.js";
+import { logger } from "./logger.js";
 import chalk from "chalk";
 
 export enum ProcessState {

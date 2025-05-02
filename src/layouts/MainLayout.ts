@@ -1,7 +1,7 @@
 import contrib from "blessed-contrib";
 import blessed from "blessed";
 import { Layout } from "./Layout";
-import { logger } from "../debug";
+import { logger } from "../logger";
 
 export class MainLayout extends Layout {
   private grid: contrib.grid;
