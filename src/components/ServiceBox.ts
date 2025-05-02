@@ -1,11 +1,11 @@
 import blessed from "blessed";
-import contrib from "blessed-contrib";
-import { getColoredState, ProcessStore } from "../processStore";
+import { getStateColorFn, ProcessStore } from "../processStore";
 import chalk from "chalk";
 
 export class ServiceBox {
   private layout: blessed.Widgets.LayoutElement;
-  private nodes: blessed.Widgets.BoxElement[];
+  private boxByProcess: Record<string, blessed.Widgets.BoxElement> = {};
+  private onProcessUpdated;
   following = true;
   constructor(
     private screen: blessed.Widgets.Screen,
@@ -17,12 +17,13 @@ export class ServiceBox {
       layout: "inline",
       width: "100%",
       height: "100%",
+      label: "Services",
     });
 
-    this.nodes = this.processStore.getProcesses().map((process) => {
-      const state = getColoredState(` ${process.state} `);
+    this.processStore.getProcesses().forEach((process) => {
+      const state = getStateColorFn(process.state)(` ${process.state} `);
       const name = chalk.hex(process.color)(`[${process.name}]`);
-      return blessed.box({
+      this.boxByProcess[process.name] = blessed.box({
         parent: this.layout,
         padding: { left: 1, right: 1, top: 0, bottom: 0 },
         border: {
@@ -32,11 +33,32 @@ export class ServiceBox {
       });
     });
 
+    this.onProcessUpdated = () => {
+      this.processStore.getProcesses().forEach((process) => {
+        const box = this.boxByProcess[process.name];
+        const state = getStateColorFn(process.state)(` ${process.state} `);
+        const name = chalk.hex(process.color)(`[${process.name}]`);
+        const content = `${name} ${state}`;
+        box.setContent(content);
+      });
+    };
+
+    this.processStore.on(
+      this.processStore.PROCESS_UPDATED_EVENT_NAME,
+      this.onProcessUpdated,
+    );
     this.screen.render();
   }
 
   destroy() {
+    this.processStore.off(
+      this.processStore.PROCESS_UPDATED_EVENT_NAME,
+      this.onProcessUpdated,
+    );
     this.layout.destroy();
-    this.nodes.forEach((n) => n.destroy());
+    const boxes = Object.values(this.boxByProcess);
+    boxes.forEach((box) => {
+      box.destroy();
+    });
   }
 }

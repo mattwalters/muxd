@@ -10,9 +10,6 @@ export class DevLayout extends Layout {
   private grid: contrib.grid;
   private logBox: LogBox;
   private serviceBox: ServiceBox;
-  private sparkline: any;
-  private worldMap: any;
-  private gauge: any;
 
   constructor(
     private root: blessed.Widgets.BoxElement,
@@ -31,27 +28,11 @@ export class DevLayout extends Layout {
     );
 
     this.serviceBox = new ServiceBox(this.screen, this.grid, this.processStore);
-    //this.worldMap = this.grid.set(6, 8, 6, 4, contrib.map, {
-    //  label: "World Map",
-    //});
-    //this.sparkline = this.grid.set(4, 8, 2, 4, contrib.sparkline, {
-    //  label: "World fooo",
-    //  tags: true,
-    //});
-
-    //this.sparkline.setData(
-    //  ["Sparkline1 asdasd asdasd HEALHTH", "HEALTHY"],
-    //  [
-    //    [10, 20, 30, 20],
-    //    [40, 10, 40, 50],
-    //  ],
-    //);
   }
 
   destroy(): void {
+    this.serviceBox.destroy();
     this.logBox.destroy();
-    this.worldMap.destroy();
-    this.gauge.destroy();
     this.root.destroy();
   }
 }

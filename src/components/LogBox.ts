@@ -16,6 +16,7 @@ export class LogBox {
   ) {
     this.box = this.grid.set(1, 0, 11, 12, blessed.box, {
       label: "Logs",
+      height: "100%",
       alwaysScroll: true,
       scrollable: true,
       scrollbar: { ch: " " },

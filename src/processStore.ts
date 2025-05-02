@@ -29,13 +29,17 @@ export type CompleteProcessConfig = ProcessConfig & {
   state: ProcessState;
 };
 
-export const getColoredState = (state: string) => {
+export const getStateColorFn = (state: string) => {
+  logger("state", state);
   if (state === ProcessState.HEALTHY) {
-    return chalk.black.bgGreen(state);
+    logger("statel healthy", state);
+    return chalk.black.bgGreen;
   } else if (state === ProcessState.FAILED) {
-    return chalk.black.bgRed(state);
+    logger("statel failed", state);
+    return chalk.black.bgRed;
   } else {
-    return chalk.black.bgYellow(state);
+    logger("statel elsse", state);
+    return chalk.black.bgYellow;
   }
 };
 
