@@ -12,6 +12,7 @@ export class App {
   private processStore;
   private screen;
   private layout: Layout;
+  private currentRoot?: blessed.Widgets.BoxElement;
 
   constructor() {
     this.cleanup = this.cleanup.bind(this);
@@ -19,7 +20,8 @@ export class App {
     this.logStore = new LogStore();
     this.processStore = new ProcessStore(this.config, this.logStore);
     this.screen = blessed.screen();
-    this.layout = new MainLayout(this.screen);
+
+    this.layout = this.createMainLayout();
     this.screen.render();
 
     this.setupKeyBindings();
@@ -28,16 +30,40 @@ export class App {
   }
 
   createMainLayout() {
-    //
+    const onSelectEnv = (env: string) => {
+      if (env === "dev") {
+        this.updateLayout(this.createDevLayout());
+      } else {
+        this.updateLayout(this.createDevLayout());
+      }
+    };
+    const root = blessed.box({
+      parent: this.screen,
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+    });
+    this.currentRoot = root;
+    return new MainLayout(root, this.screen, onSelectEnv);
   }
 
   createDevLayout() {
-    return new DevLayout(this.screen, this.processStore, this.logStore);
+    const root = blessed.box({
+      parent: this.screen,
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+    });
+    this.currentRoot = root;
+    return new DevLayout(root, this.screen, this.processStore, this.logStore);
   }
 
   updateLayout(layout: Layout) {
     this.layout.destroy();
     this.layout = layout;
+    this.screen.render();
     //
   }
 

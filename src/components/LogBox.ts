@@ -26,10 +26,14 @@ export class LogBox {
 
       this.box.setContent(formattedLines);
       if (this.following) {
-        this.box.setScrollPerc(100);
+        setImmediate(() => {
+          this.box.setScrollPerc(100);
+          this.screen.render();
+        });
       }
       this.screen.render();
     };
+    this.screen.render();
     this.logStore.on(this.logStore.LOG_ADDED_EVENT_NAME, this.onLogAdded);
   }
 

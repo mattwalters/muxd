@@ -8,9 +8,11 @@ import { Layout } from "./Layout";
 export class DevLayout extends Layout {
   private grid: contrib.grid;
   private logBox: LogBox;
-  private following = true;
+  private worldMap: any;
+  private gauge: any;
 
   constructor(
+    private root: blessed.Widgets.BoxElement,
     private screen: blessed.Widgets.Screen,
     private processStore: ProcessStore,
     private logStore: LogStore,
@@ -23,18 +25,10 @@ export class DevLayout extends Layout {
       this.logStore,
       this.processStore,
     );
-    this.addWorldMap();
-    this.addGauge();
-  }
-
-  private addWorldMap() {
-    return this.grid.set(0, 8, 6, 4, contrib.map, {
+    this.worldMap = this.grid.set(0, 8, 6, 4, contrib.map, {
       label: "World Map",
     });
-  }
-
-  private addGauge() {
-    return this.grid.set(6, 8, 6, 4, contrib.gauge, {
+    this.gauge = this.grid.set(6, 8, 6, 4, contrib.gauge, {
       label: "Progress",
       stroke: "green",
       fill: "white",
@@ -42,7 +36,9 @@ export class DevLayout extends Layout {
   }
 
   destroy(): void {
-    // Clone children array to avoid mutation during iteration
-    [...this.screen.children].forEach((child) => child.destroy());
+    this.logBox.destroy();
+    this.worldMap.destroy();
+    this.gauge.destroy();
+    this.root.destroy();
   }
 }

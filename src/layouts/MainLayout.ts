@@ -1,36 +1,69 @@
 import contrib from "blessed-contrib";
 import blessed from "blessed";
 import { Layout } from "./Layout";
+import { logger } from "../debug";
 
 export class MainLayout extends Layout {
   private grid: contrib.grid;
+  private envList!: blessed.Widgets.ListElement;
 
-  constructor(private screen: blessed.Widgets.Screen) {
+  constructor(
+    private root: blessed.Widgets.BoxElement,
+    private screen: blessed.Widgets.Screen,
+    private onSelect: (env: string) => void,
+  ) {
     super();
     this.grid = new contrib.grid({ rows: 12, cols: 12, screen: this.screen });
+
     this.addWorldMap();
-    this.addList();
+    this.addEnvironmentSelector();
+
+    // ensure focus is on our list so arrows work
+    this.envList.focus();
+
     this.screen.render();
   }
 
   private addWorldMap() {
-    return this.grid.set(0, 0, 12, 12, contrib.map, {});
+    this.grid.set(0, 0, 12, 12, contrib.map, {});
   }
 
-  private addList() {
-    const box = this.grid.set(4, 5, 4, 2, blessed.box, {
-      padding: 1,
+  private addEnvironmentSelector() {
+    // create the list itself, not a box + child
+    this.envList = this.grid.set(4, 5, 4, 2, blessed.list, {
       label: "Select Environment",
       border: "line",
-      width: "50%",
-      top: "center",
-      left: "center",
+      padding: { left: 1, right: 1 },
+      keys: true, // allow ↑/↓ navigation
+      mouse: true, // allow clicking
+      items: ["Dev", "Staging", "Prod"],
+      style: {
+        selected: {
+          bg: "blue", // background of highlighted item
+          fg: "white", // text color of highlighted
+        },
+        item: {
+          hover: {
+            bg: "gray", // optional: hover color
+          },
+        },
+      },
     });
-    blessed.list({ parent: box, items: ["Dev", "Staging", "Prod"] });
+
+    // when user hits Enter on an item
+    this.envList.on("select", (item) => {
+      const env = item.getContent();
+      this.onSelect(env);
+      logger("env: ", env);
+      // do something with the chosen environment...
+      // e.g. this.emit("env-changed", env);
+      // then re-render if needed:
+      this.screen.render();
+    });
   }
 
   destroy(): void {
-    // Clone children array to avoid mutation during iteration
-    [...this.screen.children].forEach((child) => child.destroy());
+    this.envList.destroy();
+    this.root.destroy();
   }
 }
