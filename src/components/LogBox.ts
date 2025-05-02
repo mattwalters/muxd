@@ -10,13 +10,17 @@ export class LogBox {
   following = true;
   constructor(
     private screen: blessed.Widgets.Screen,
-    private grid: any,
+    private container: blessed.Widgets.BoxElement,
+    private offset: number,
     private logStore: LogStore,
     private processStore: ProcessStore,
   ) {
-    this.box = this.grid.set(1, 0, 11, 12, blessed.box, {
+    this.box = blessed.box({
+      parent: this.container,
       label: "Logs",
-      height: "100%",
+      top: offset,
+      height: `100%-${offset}`,
+      border: "line",
       alwaysScroll: true,
       scrollable: true,
       scrollbar: { ch: " " },

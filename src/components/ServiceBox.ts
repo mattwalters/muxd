@@ -9,15 +9,15 @@ export class ServiceBox {
   following = true;
   constructor(
     private screen: blessed.Widgets.Screen,
-    private grid: any,
+    private container: blessed.Widgets.BoxElement,
     private processStore: ProcessStore,
   ) {
-    this.layout = this.grid.set(0, 0, 1, 12, blessed.layout, {
+    this.layout = blessed.layout({
+      parent: this.container,
       padding: 0,
       layout: "inline",
       width: "100%",
-      height: "100%",
-      label: "Services",
+      height: this.height(),
     });
 
     this.processStore.getProcesses().forEach((process) => {
@@ -48,6 +48,10 @@ export class ServiceBox {
       this.onProcessUpdated,
     );
     this.screen.render();
+  }
+
+  height() {
+    return 3;
   }
 
   destroy() {

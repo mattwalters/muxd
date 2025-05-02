@@ -5,9 +5,10 @@ import { LogBox } from "../components/LogBox";
 import { ProcessStore } from "../processStore";
 import { Layout } from "./Layout";
 import { ServiceBox } from "../components/ServiceBox";
+import { logger } from "../logger";
 
 export class DevLayout extends Layout {
-  private grid: contrib.grid;
+  private container: blessed.Widgets.BoxElement;
   private logBox: LogBox;
   private serviceBox: ServiceBox;
 
@@ -18,16 +19,24 @@ export class DevLayout extends Layout {
     private logStore: LogStore,
   ) {
     super();
-    this.grid = new contrib.grid({ rows: 12, cols: 12, screen: this.screen });
+    this.container = blessed.box({
+      parent: this.root,
+    });
 
-    this.logBox = new LogBox(
+    this.serviceBox = new ServiceBox(
       this.screen,
-      this.grid,
-      this.logStore,
+      this.container,
       this.processStore,
     );
 
-    this.serviceBox = new ServiceBox(this.screen, this.grid, this.processStore);
+    logger("number", this.serviceBox.height());
+    this.logBox = new LogBox(
+      this.screen,
+      this.container,
+      this.serviceBox.height() as number,
+      this.logStore,
+      this.processStore,
+    );
   }
 
   destroy(): void {
