@@ -1,4 +1,4 @@
-import { loadConfig } from "./loader";
+import { loadConfig } from "./config";
 import blessed from "blessed";
 import { ProcessStore } from "./processStore";
 import { LogStore } from "./logStore";
@@ -86,6 +86,7 @@ export class App {
   private cleanup() {
     this.processStore.cleanup();
     this.layout.destroy();
+    this.currentRoot?.destroy();
     this.screen.destroy();
     process.exit(0);
   }

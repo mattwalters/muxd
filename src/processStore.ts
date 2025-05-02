@@ -1,9 +1,9 @@
-import { ChildProcess, spawn, exec } from "child_process";
-import { Config, ProcessConfig, ReadyCheck } from "./config/schema.js";
-import { LogStore } from "./logStore.js";
+import { ChildProcess, spawn, exec, execSync } from "child_process";
+import { Config, ProcessConfig, ReadyCheck } from "./schema";
+import { LogStore } from "./logStore";
 import EventEmitter from "events";
-import { logger } from "./logger.js";
 import chalk from "chalk";
+import path from "path";
 
 export enum ProcessState {
   PENDING = "PENDING", // Process is initialized but not started yet
@@ -30,30 +30,27 @@ export type CompleteProcessConfig = ProcessConfig & {
 };
 
 export const getStateColorFn = (state: string) => {
-  logger("state", state);
   if (state === ProcessState.HEALTHY) {
-    logger("statel healthy", state);
     return chalk.black.bgGreen;
   } else if (state === ProcessState.FAILED) {
-    logger("statel failed", state);
     return chalk.black.bgRed;
   } else {
-    logger("statel elsse", state);
     return chalk.black.bgYellow;
   }
 };
 
 export class ProcessStore extends EventEmitter {
   private services: Record<string, CompleteProcessConfig>;
-  private logStore: LogStore;
   private runningProcesses: Record<string, ChildProcess> = {};
   PROCESS_UPDATED_EVENT_NAME = "process-updated";
 
-  constructor(config: Config, logStore: LogStore) {
+  constructor(
+    private config: Config,
+    private logStore: LogStore,
+  ) {
     super();
-    this.logStore = logStore;
     this.services = {};
-    config.services.forEach((s, index) => {
+    this.config.services.forEach((s, index) => {
       const color = s.color ?? colors[index % colors.length] ?? "#FFFFFF";
       this.services[s.name] = { ...s, color, state: ProcessState.PENDING };
     });
@@ -67,7 +64,30 @@ export class ProcessStore extends EventEmitter {
     return this.services[serviceName]?.color ?? "white";
   }
 
+  async startDockerCompose() {
+    if (this.config.dockerCompose) {
+      try {
+        const composePath = path.resolve(
+          process.cwd(),
+          this.config.dockerCompose.file,
+        );
+        let profile = this.config.dockerCompose?.profile ?? "";
+        if (profile) {
+          profile = ` --profile ${profile}`;
+        }
+        const dockerCommand = `docker compose${profile} -f "${composePath}" up -d`;
+        execSync(dockerCommand, {
+          stdio: "inherit",
+        });
+      } catch (err: any) {
+        console.error("Failed to start docker-compose services:", err.message);
+        process.exit(1);
+      }
+    }
+  }
+
   async startAllProcesses() {
+    await this.startDockerCompose();
     for (const serviceName of Object.keys(this.services)) {
       const procConfig = this.services[serviceName]!;
       try {
@@ -96,7 +116,6 @@ export class ProcessStore extends EventEmitter {
     const proc = this.spawnProcess(procConfig, (data, isError) => {
       const lines = data.toString().split("\n");
       lines.forEach((line) => {
-        logger("line", line, line.trim(), line.trimEnd());
         if (line.trim()) {
           this.logStore.addLog(
             procConfig.name,
@@ -108,7 +127,6 @@ export class ProcessStore extends EventEmitter {
     this.runningProcesses[procConfig.name] = proc;
 
     proc.on("close", (code: number | null, signal: string | null) => {
-      logger("the process closed", procConfig.name);
       // Log exit with code and signal
       let msg = `exited with code ${code}`;
       if (signal) msg += ` and signal ${signal}`;
@@ -126,18 +144,14 @@ export class ProcessStore extends EventEmitter {
     if (procConfig.ready) {
       this.logStore.addLog(procConfig.name, "Performing ready check...");
       try {
-        logger("waitForReadyCheck", procConfig.ready);
         await this.waitForReadyCheck(procConfig.ready as ReadyCheck);
-        logger("we are ready", procConfig.name);
         this.logStore.addLog(procConfig.name, "Ready check passed.");
-        logger("we are ready 2222", procConfig.name);
         this.updateProcessStatus(procConfig.name, ProcessState.HEALTHY);
       } catch (err: any) {
         this.logStore.addLog(
           procConfig.name,
           `Ready check failed: ${err.message}`,
         );
-        logger("we are updating a process to stopped", procConfig.name);
         this.updateProcessStatus(procConfig.name, ProcessState.STOPPED);
       }
     } else {
@@ -217,19 +231,15 @@ export class ProcessStore extends EventEmitter {
     return new Promise((resolve, reject) => {
       const intervalMs = check.interval || 1000;
       const timeoutMs = check.timeout || 5000;
-      logger("timeout", timeoutMs);
       const startTime = Date.now();
       const interval = setInterval(() => {
         if (Date.now() - startTime > timeoutMs) {
-          logger("ITS OVER");
           clearInterval(interval);
           reject(new Error("Ready check timed out"));
           return;
         }
-        exec(check.command, (error: Error | null) => {
-          logger("ready check error", error);
+        exec(check.command!, (error: Error | null) => {
           if (!error) {
-            logger("we foooooood");
             clearInterval(interval);
             resolve();
           }
@@ -259,7 +269,6 @@ export class ProcessStore extends EventEmitter {
     processName: string,
     newState: ProcessState,
   ): void {
-    logger("We are updating a process", newState);
     const service = this.services[processName]!;
     const oldState = service.state;
     service.state = newState;

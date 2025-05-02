@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
-import { execSync } from "child_process";
 import { Config, ConfigSchema } from "./schema";
 
 // Determine configuration file path from command line args
@@ -61,21 +60,6 @@ function processDockerComposeConfig(config: Config): void {
 
   if (!fs.existsSync(composePath)) {
     console.error("Docker-compose file not found:", composePath);
-    process.exit(1);
-  }
-
-  // Start docker-compose services
-  try {
-    let profile = config.dockerCompose?.profile ?? "";
-    if (profile) {
-      profile = ` --profile ${profile}`;
-    }
-    const dockerCommand = `docker compose${profile} -f "${composePath}" up -d`;
-    execSync(dockerCommand, {
-      stdio: "inherit",
-    });
-  } catch (err: any) {
-    console.error("Failed to start docker-compose services:", err.message);
     process.exit(1);
   }
 
