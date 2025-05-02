@@ -1,4 +1,4 @@
-import { loadConfig } from "./config/loader";
+import { loadConfig } from "./loader";
 import blessed from "blessed";
 import { ProcessStore } from "./processStore";
 import { LogStore } from "./logStore";
