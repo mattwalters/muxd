@@ -43,7 +43,10 @@ export class DevLayout extends Layout {
     this.modal = new RestartModal(this.screen, this.root, this.processStore);
   }
 
-  handleKeyPress(key: string) {
+  handleKeyPress(key: string, event: blessed.Widgets.Events.IKeyEventArg) {
+    if (this.logBox.handleKeyPress(key, event)) {
+      return true;
+    }
     logger("were key pressing in dev layout");
     if (key === "r") {
       logger("open modal");
@@ -59,7 +62,7 @@ export class DevLayout extends Layout {
       const name = this.modal.selected();
       this.processStore.restartProcess(name);
       this.modal.hide();
-      return;
+      return true;
     }
   }
 

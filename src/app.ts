@@ -73,10 +73,9 @@ export class App {
       this.cleanup();
     });
 
-    this.screen.on("keypress", (_, event) => {
-      const key = event.name;
+    this.screen.on("keypress", (key, event) => {
       logger("key", key);
-      if (this.layout && this.layout.handleKeyPress(key)) {
+      if (this.layout && this.layout.handleKeyPress(key, event)) {
         return;
       }
 

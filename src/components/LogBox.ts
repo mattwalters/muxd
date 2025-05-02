@@ -2,6 +2,7 @@ import blessed from "blessed";
 import chalk from "chalk";
 import { LogStore, LogEntry } from "../logStore";
 import { ProcessStore } from "../processStore";
+import { logger } from "../logger";
 
 export class LogBox {
   private box: blessed.Widgets.BoxElement;
@@ -31,6 +32,31 @@ export class LogBox {
         style: { bg: "white" },
       },
     });
+
+    // Handle manual scrolling and toggling follow mode
+    this.box.on("keypress", (ch, key) => {
+      // 'f' to resume follow mode and scroll to bottom
+      if (key.name === "f") {
+        this.following = true;
+        this.box.setScrollPerc(100);
+        this.screen.render();
+        return;
+      }
+      // 'j' or 'k' enter manual mode and optionally page-scroll
+      if (key.name === "j" || key.name === "k") {
+        this.following = false;
+        // Shift+J/K for page scroll
+        const page = this.box.height as number;
+        if (key.shift) {
+          if (key.name === "j") {
+            this.box.scroll(page || 1);
+          } else {
+            this.box.scroll(-(page || 1));
+          }
+          this.screen.render();
+        }
+      }
+    });
     this.onLogAdded = () => {
       const lines = this.logStore.getLogs();
       const formattedLines = this.formatLogEntries(lines);
@@ -46,6 +72,38 @@ export class LogBox {
     };
     this.screen.render();
     this.logStore.on(this.logStore.LOG_ADDED_EVENT_NAME, this.onLogAdded);
+  }
+
+  handleKeyPress(key: string, event: blessed.Widgets.Events.IKeyEventArg) {
+    logger("key", key);
+    if (key === "f") {
+      this.following = true;
+      setImmediate(() => {
+        this.box.setScrollPerc(100);
+        this.screen.render();
+      });
+      return true;
+    }
+    if (event.name === "j") {
+      this.following = false;
+      const height =
+        typeof this.box.height === "string"
+          ? parseInt(this.box.height)
+          : this.box.height;
+      const amount = event.shift ? height : 1;
+      this.box.scroll(amount);
+      return true;
+    }
+    if (event.name === "k") {
+      this.following = false;
+      const height =
+        typeof this.box.height === "string"
+          ? parseInt(this.box.height)
+          : this.box.height;
+      const amount = event.shift ? -height : -1;
+      this.box.scroll(amount);
+      return true;
+    }
   }
 
   destroy() {
