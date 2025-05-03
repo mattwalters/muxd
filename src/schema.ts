@@ -25,6 +25,8 @@ export const CompleteProcessConfigSchema = z.object({
   dependsOn: z.array(z.string()).optional(),
   ready: ReadyCheckSchema.optional(),
   color: z.string(),
+  mute: z.boolean(),
+  solo: z.boolean(),
 });
 
 export const DockerComposeSchema = z.object({

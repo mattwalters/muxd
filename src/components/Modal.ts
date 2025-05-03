@@ -1,6 +1,5 @@
 import blessed from "blessed";
 import { ProcessStore } from "../processStore";
-import { logger } from "../logger";
 
 export class Modal {
   protected box: blessed.Widgets.BoxElement;
@@ -46,7 +45,7 @@ export class Modal {
   }
 }
 
-export class RestartModal extends Modal {
+export class ServiceModal extends Modal {
   private list: blessed.Widgets.ListElement;
   constructor(
     screen: blessed.Widgets.Screen,

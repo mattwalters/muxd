@@ -27,6 +27,8 @@ export const colors = [
 export type CompleteProcessConfig = ProcessConfig & {
   color: string;
   state: ProcessState;
+  solo: boolean;
+  mute: boolean;
 };
 
 export const getStateColorFn = (state: string) => {
@@ -52,7 +54,13 @@ export class ProcessStore extends EventEmitter {
     this.services = {};
     this.config.services.forEach((s, index) => {
       const color = s.color ?? colors[index % colors.length] ?? "#FFFFFF";
-      this.services[s.name] = { ...s, color, state: ProcessState.PENDING };
+      this.services[s.name] = {
+        ...s,
+        color,
+        state: ProcessState.PENDING,
+        mute: false,
+        solo: false,
+      };
     });
   }
 
@@ -163,6 +171,25 @@ export class ProcessStore extends EventEmitter {
     }
 
     return proc;
+  }
+
+  async stopProcess(procConfig: CompleteProcessConfig): Promise<void> {
+    const processName = procConfig.name;
+    this.logStore.addSystemLog(`Stopping process ${processName}...`);
+    const currentProc = this.runningProcesses[processName];
+    // Indicate stopping if process is running
+    if (currentProc && !currentProc.killed) {
+      this.updateProcessStatus(processName, ProcessState.STOPPING);
+      try {
+        currentProc.kill();
+      } catch (err) {
+        console.error("Error killing process", processName, err);
+      }
+      // Wait for the process to close before restarting
+      await new Promise<void>((resolve) =>
+        currentProc.once("close", () => resolve()),
+      );
+    }
   }
 
   async restartProcess(processName: string): Promise<void> {
