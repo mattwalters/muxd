@@ -79,6 +79,20 @@ export class DevLayout extends Layout {
         this.modal.hide();
         return true;
       }
+
+      if (key === "m") {
+        const name = this.modal.selected();
+        this.processStore.toggleMute(name);
+        this.modal.hide();
+        return true;
+      }
+
+      if (key === "s") {
+        const name = this.modal.selected();
+        this.processStore.toggleSolo(name);
+        this.modal.hide();
+        return true;
+      }
     }
   }
 

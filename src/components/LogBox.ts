@@ -58,7 +58,18 @@ export class LogBox {
       }
     });
     this.onLogAdded = () => {
-      const lines = this.logStore.getLogs();
+      let lines = this.logStore.getLogs();
+      const solos = this.processStore
+        .getProcesses()
+        .filter((p) => p.solo && !p.mute);
+      const mutes = this.processStore.getProcesses().filter((p) => !p.mute);
+      if (solos.length > 0) {
+        const soloNames = solos.map((s) => s.name);
+        lines = lines.filter((l) => soloNames.includes(l.process));
+      } else if (mutes.length > 0) {
+        const nonMutedNames = mutes.map((s) => s.name);
+        lines = lines.filter((l) => nonMutedNames.includes(l.process));
+      }
       const formattedLines = this.formatLogEntries(lines);
 
       this.box.setContent(formattedLines);
@@ -72,6 +83,10 @@ export class LogBox {
     };
     this.screen.render();
     this.logStore.on(this.logStore.LOG_ADDED_EVENT_NAME, this.onLogAdded);
+    this.processStore.on(
+      this.processStore.PROCESS_UPDATED_EVENT_NAME,
+      this.onLogAdded,
+    );
   }
 
   handleKeyPress(key: string, event: blessed.Widgets.Events.IKeyEventArg) {
@@ -108,6 +123,10 @@ export class LogBox {
 
   destroy() {
     this.logStore.off(this.logStore.LOG_ADDED_EVENT_NAME, this.onLogAdded);
+    this.processStore.off(
+      this.processStore.PROCESS_UPDATED_EVENT_NAME,
+      this.onLogAdded,
+    );
     this.box.destroy();
   }
 

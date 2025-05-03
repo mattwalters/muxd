@@ -192,6 +192,26 @@ export class ProcessStore extends EventEmitter {
     }
   }
 
+  toggleMute(name: string) {
+    const procConfig = this.services[name];
+    if (!procConfig) {
+      this.logStore.addSystemLog(`Configuration for ${name} not found.`);
+      return;
+    }
+    procConfig.mute = !procConfig.mute;
+    this.emit(this.PROCESS_UPDATED_EVENT_NAME, procConfig.name, procConfig);
+  }
+
+  toggleSolo(name: string) {
+    const procConfig = this.services[name];
+    if (!procConfig) {
+      this.logStore.addSystemLog(`Configuration for ${name} not found.`);
+      return;
+    }
+    procConfig.solo = !procConfig.solo;
+    this.emit(this.PROCESS_UPDATED_EVENT_NAME, procConfig.name, procConfig);
+  }
+
   async restartProcess(processName: string): Promise<void> {
     const procConfig = this.services[processName];
     if (!procConfig) {
