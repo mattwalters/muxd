@@ -1,5 +1,5 @@
 import blessed from "blessed";
-import { ProcessStore } from "../processStore";
+import { ProcessStore } from "../processStore.js";
 
 export class Modal {
   protected box: blessed.Widgets.BoxElement;

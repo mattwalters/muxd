@@ -1,5 +1,5 @@
 import blessed from "blessed";
-import { getStateColorFn, ProcessStore } from "../processStore";
+import { getStateColorFn, ProcessStore } from "../processStore.js";
 import chalk from "chalk";
 
 export class ServiceBox {

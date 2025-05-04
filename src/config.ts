@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
-import { Config, ConfigSchema } from "./schema";
+import { Config, ConfigSchema } from "./schema.js";
 
 // Determine configuration file path from command line args
 function getConfigFilePath(): string {

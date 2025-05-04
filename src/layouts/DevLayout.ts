@@ -1,11 +1,11 @@
 import blessed from "blessed";
-import { LogStore } from "../logStore";
-import { LogBox } from "../components/LogBox";
-import { ProcessStore } from "../processStore";
-import { Layout } from "./Layout";
-import { ServiceBox } from "../components/ServiceBox";
-import { logger } from "../logger";
-import { ServiceModal } from "../components/Modal";
+import { LogStore } from "../logStore.js";
+import { LogBox } from "../components/LogBox.js";
+import { ProcessStore } from "../processStore.js";
+import { Layout } from "./Layout.js";
+import { ServiceBox } from "../components/ServiceBox.js";
+import { logger } from "../logger.js";
+import { ServiceModal } from "../components/Modal.js";
 
 export class DevLayout extends Layout {
   private container: blessed.Widgets.BoxElement;

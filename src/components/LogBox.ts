@@ -1,8 +1,8 @@
 import blessed from "blessed";
 import chalk from "chalk";
-import { LogStore, LogEntry } from "../logStore";
-import { ProcessStore } from "../processStore";
-import { logger } from "../logger";
+import { LogStore, LogEntry } from "../logStore.js";
+import { ProcessStore } from "../processStore.js";
+import { logger } from "../logger.js";
 
 export class LogBox {
   private box: blessed.Widgets.BoxElement;

@@ -1,11 +1,11 @@
-import { loadConfig } from "./config";
+import { loadConfig } from "./config.js";
 import blessed from "blessed";
-import { ProcessStore } from "./processStore";
-import { LogStore } from "./logStore";
-import { DevLayout } from "./layouts/DevLayout";
-import { Layout } from "./layouts/Layout";
-import { MainLayout } from "./layouts/MainLayout";
-import { logger } from "./logger";
+import { ProcessStore } from "./processStore.js";
+import { LogStore } from "./logStore.js";
+import { DevLayout } from "./layouts/DevLayout.js";
+import { Layout } from "./layouts/Layout.js";
+import { MainLayout } from "./layouts/MainLayout.js";
+import { logger } from "./logger.js";
 
 export class App {
   private config;

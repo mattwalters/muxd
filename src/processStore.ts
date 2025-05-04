@@ -1,6 +1,6 @@
 import { ChildProcess, spawn, exec, execSync } from "child_process";
-import { Config, ProcessConfig, ReadyCheck } from "./schema";
-import { LogStore } from "./logStore";
+import { Config, ProcessConfig, ReadyCheck } from "./schema.js";
+import { LogStore } from "./logStore.js";
 import EventEmitter from "events";
 import chalk from "chalk";
 import path from "path";
