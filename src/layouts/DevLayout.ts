@@ -55,7 +55,7 @@ export class DevLayout extends Layout {
         this.modal.hide();
         return true;
       }
-      if (key === "d") {
+      if (key === "x") {
         const name = this.modal.selected();
         const config = this.processStore
           .getProcesses()
@@ -64,7 +64,7 @@ export class DevLayout extends Layout {
         this.modal.hide();
         return true;
       }
-      if (key === "u") {
+      if (key === "a") {
         const name = this.modal.selected();
         const config = this.processStore
           .getProcesses()
@@ -87,7 +87,7 @@ export class DevLayout extends Layout {
         return true;
       }
 
-      if (key === "s") {
+      if (key === "o") {
         const name = this.modal.selected();
         this.processStore.toggleSolo(name);
         this.modal.hide();

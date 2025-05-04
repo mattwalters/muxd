@@ -17,7 +17,8 @@ export class Modal {
       height: "30%",
       border: "line",
       padding: 1,
-      label: " Confirm Restart ",
+      label:
+        "Services | r - restart | x - stop | a - start | m - mute | o - only",
       hidden: true,
       keys: true,
       mouse: true,
